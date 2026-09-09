@@ -170,13 +170,16 @@ th{font-size:11px;color:var(--sub);letter-spacing:.08em;border-top:none}
     </div>
     <div class="lcount" id="lCount"></div>
     <div id="clist"></div>
-    <div class="btns">
-      <button class="primary mini" id="aiBatch">未送信をAI一括作成</button>
-      <select id="aiN" style="width:auto;padding:4px 8px;font-size:12px">
-        <option value="5">5件</option><option value="10" selected>10件</option><option value="20">20件</option><option value="30">30件</option>
-      </select>
-      <span class="status" id="batchStat" style="margin:0"></span>
+    <div class="btns" style="margin-top:4px">
+      <label style="display:inline;margin:0;font-size:12px;font-weight:400;letter-spacing:0"><input type="checkbox" id="cbAll" style="vertical-align:-2px"> 表示中を全選択</label>
+      <span class="status" id="selCount" style="margin:0"></span>
     </div>
+    <div class="btns">
+      <button class="primary mini" id="aiBatch">選択をAI生成</button>
+      <button class="mini" id="resBatch">選択を導線調査</button>
+      <button class="mini" id="hpBatch">選択をHP補完</button>
+    </div>
+    <div class="status" id="batchStat" style="margin:4px 0 0"></div>
     <div class="btns">
       <button class="mini" id="csvIn">CSV取込</button>
       <button class="mini" id="csvOut">CSV書き出し</button>
@@ -299,7 +302,7 @@ function renderList(){
   $('lCount').textContent = `${list.length} 件（全 ${clinics.length} 件）`;
   $('clist').innerHTML = list.map(c=>`
     <div class="crow${sel && sel.id===c.id?' sel':''}" data-id="${c.id}">
-      <span class="nm">${c.priority?'★ ':''}${esc(c.name)}</span>
+      <span class="nm"><input type="checkbox" class="cb" data-id="${c.id}" ${selIds.has(c.id)?'checked':''} style="vertical-align:-2px;margin-right:6px">${c.priority?'★ ':''}${esc(c.name)}</span>
       <span>${c.gen?'<span class="pill">文面✓</span> ':''}<span class="pill ${c.status==='未送信'?'dim':(c.status==='NG'||c.status==='辞退'?'bad':(c.status==='送信済'?'warn':''))}">${esc(c.status||'')}</span></span>
       <span class="meta">
         <span>${esc(c.department||'—')}</span>
@@ -309,11 +312,25 @@ function renderList(){
     </div>`).join('') || '<div class="status">該当なし</div>';
 }
 ['fQ','fDept','fCh','fSt','fPr'].forEach(id=>{ $(id).addEventListener('input', renderList); });
+const selIds = new Set();
+function updSelCount(){ $('selCount').textContent = selIds.size ? `${selIds.size} 件選択中` : ''; }
 $('clist').addEventListener('click', e=>{
+  if(e.target.classList && e.target.classList.contains('cb')){
+    const id = e.target.dataset.id;
+    e.target.checked ? selIds.add(id) : selIds.delete(id);
+    updSelCount(); return;
+  }
   const row = e.target.closest('.crow'); if(!row) return;
   sel = clinics.find(c=>c.id===row.dataset.id);
   renderList(); renderDetail();
 });
+$('cbAll').addEventListener('change', e=>{
+  const list = filtered();
+  if(e.target.checked) list.forEach(c=>selIds.add(c.id));
+  else list.forEach(c=>selIds.delete(c.id));
+  updSelCount(); renderList();
+});
+function selected(){ return filtered().filter(c=>selIds.has(c.id)); }
 
 /* ============ 文面の組み立て（固定文は定数から。一字も揺らさない） ============ */
 function mediaBlock(dept){
@@ -395,7 +412,10 @@ function renderDetail(){
         ${['未送信','送信済','返信あり','アポ','辞退','NG'].map(s=>`<option${c.status===s?' selected':''}>${s}</option>`).join('')}
       </select>
       <button class="mini" id="dStar">${c.priority?'★解除':'★付与'}</button>
+      <button class="mini" id="dResearch"${c.hp_url?'':' disabled title="HP URLなし"'}>導線を調査</button>
     </div>
+    ${c.research && Array.isArray(c.research.evidence) && c.research.evidence.length ? `<div class="alert ${c.research.evidence.some(x=>/⚠/.test(x))?'warn':''}" style="background:var(--accent-weak);color:var(--ink)"><b>導線調査（${(c.research.checked_at||'').slice(0,10)}）</b><br>${c.research.evidence.map(esc).join('<br>')}</div>`:''}
+    ${c.send_channel==='未対応' ? `<div class="alert warn">このチャネルでは送れません → IG DM／テレアポ行き</div>`:''}
     ${c.hp_excerpt?`<h2 class="sec">HP抜粋（Why you の材料）</h2><div class="excerpt">${esc(c.hp_excerpt)}</div>`:''}
 
     <h2 class="sec">材料チップ（押すと下書きが入る。原文確認は必須）</h2>
@@ -472,6 +492,11 @@ function bindDetail(){
   });
   $('dStatus').onchange = async e=>{ await updClinic({status:e.target.value}); };
   $('dStar').onclick = async ()=>{ await updClinic({priority:!c.priority}); renderDetail(); };
+  $('dResearch').onclick = async ()=>{
+    $('dResearch').disabled = true; $('dResearch').textContent = '調査中…';
+    try{ await researchOne(c); toast('導線調査が完了しました'); renderDetail(); buildFilters(); }
+    catch(e){ toast('調査失敗: '+e.message); $('dResearch').disabled=false; $('dResearch').textContent='導線を調査'; }
+  };
   $('dSeg').onclick = e=>{
     const b=e.target.closest('button'); if(!b) return;
     view=b.dataset.v; [...$('dSeg').children].forEach(x=>x.classList.toggle('on',x===b));
@@ -678,57 +703,90 @@ function parseCSV(text){
   if(cur!==''||row.length){ row.push(cur); rows.push(row); }
   return rows.filter(r=>r.some(c=>c.trim()));
 }
-/* ============ AI一括作成（文面デスクの一括作成を移植：1件ずつ独立・同時2件・混雑時は1回だけ再試行） ============ */
-$('aiBatch').onclick = async ()=>{
-  const n = +$('aiN').value;
-  const targets = filtered().filter(c=>c.status==='未送信' && c.hp_url && !c.gen).slice(0, n);
-  if(!targets.length){ $('batchStat').textContent = '対象なし（未送信・HPあり・文面未作成の院が表示中にありません）'; return; }
-  $('aiBatch').disabled = true;
+/* ============ 一括処理（1件ずつ独立したパイプライン・同時2件・混雑時は1回だけ再試行） ============ */
+async function researchOne(c){
+  const r = await callFn('research', { url: c.hp_url });
+  const patch = { send_channel: r.channel, research: r, captcha: !!r.captcha };
+  if(r.email) patch.email = r.email;
+  if(r.form_url) patch.form_url = r.form_url;
+  const { error } = await sb.from('clinics').update(patch).eq('id', c.id);
+  if(error) throw new Error(error.message);
+  Object.assign(c, patch);
+}
+async function hpOne(c){
+  const r = await callFn('findhp', { name: c.name });
+  const research = Object.assign({}, c.research||{}, { findhp: r });
+  const patch = { research };
+  if(r.url) patch.hp_url = r.url;
+  if(r.url && !r.verified) patch.notes = ((c.notes||'')+'\n⚠HP要確認: '+(r.evidence||'')).trim();
+  if(!r.url) patch.notes = ((c.notes||'')+'\n'+(r.evidence||'HP特定できず')).trim();
+  const { error } = await sb.from('clinics').update(patch).eq('id', c.id);
+  if(error) throw new Error(error.message);
+  Object.assign(c, patch);
+}
+async function runBatch(btn, items, fn, label, doneMsg){
+  if(!items.length){ $('batchStat').textContent = '対象なし（チェックを入れた院の中に処理できるものがありません）'; return; }
+  btn.disabled = true;
   let done = 0, ng = 0; const errs = [];
-  const upd = ()=>{ $('batchStat').textContent = `生成中… ${done+ng} / ${targets.length}（失敗 ${ng}）`; };
+  const upd = ()=>{ $('batchStat').textContent = `${label}中… ${done+ng} / ${items.length}（失敗 ${ng}）`; };
   upd();
   let next = 0;
   async function worker(){
-    while(next < targets.length){
-      const c = targets[next++];
-      try{
-        await genOne(c); done++;
-      }catch(e){
+    while(next < items.length){
+      const c = items[next++];
+      try{ await fn(c); done++; }
+      catch(e){
         if(/429|混み合|rate/i.test(e.message||'')){
           await new Promise(r=>setTimeout(r, 25000));
-          try{ await genOne(c); done++; }catch(e2){ ng++; errs.push(c.name+': '+e2.message); }
+          try{ await fn(c); done++; }catch(e2){ ng++; errs.push(c.name+': '+e2.message); }
         } else { ng++; errs.push(c.name+': '+e.message); }
       }
       upd(); renderList();
     }
   }
   await Promise.all([worker(), worker()]);
-  $('batchStat').textContent = `完了 ${done}件／失敗 ${ng}件。「文面✓」の院を開いて検品→送信してください。`;
-  if(errs.length) console.warn('一括作成の失敗:', errs);
-  $('aiBatch').disabled = false;
-};
+  $('batchStat').textContent = `${label}完了 ${done}件／失敗 ${ng}件。${doneMsg||''}` + (errs.length?`（詳細は最初の失敗: ${errs[0]}）`:'');
+  if(errs.length) console.warn(label+'の失敗:', errs);
+  buildFilters();
+  btn.disabled = false;
+}
+$('aiBatch').onclick = ()=>runBatch($('aiBatch'), selected().filter(c=>c.hp_url), genOne, 'AI生成', '「文面✓」の院を開いて検品→送信してください。');
+$('resBatch').onclick = ()=>runBatch($('resBatch'), selected().filter(c=>c.hp_url), researchOne, '導線調査', '送信手段が4分類に更新されました。');
+$('hpBatch').onclick = ()=>runBatch($('hpBatch'), selected().filter(c=>!c.hp_url), hpOne, 'HP補完', '⚠付きは目視確認してから使ってください。');
 
 $('csvIn').onclick = ()=>$('csvFile').click();
 $('csvFile').onchange = async e=>{
   const file = e.target.files[0]; if(!file) return;
   const rows = parseCSV(await file.text());
-  const head = rows[0];
+  const head = rows[0].map(h=>h.trim());
+  const findCol = names => { for(const n of names){ const i = head.indexOf(n); if(i>=0) return i; } return -1; };
+  // クリニック名 or HP URL のどちらかがあれば取り込める（足りない側は「HP補完」「導線調査」で埋める）
+  const iName = findCol(['クリニック名','名前','医院名','施設名','クリニック','院名']);
+  const iUrl  = findCol(['HP URL','HP','URL','ホームページ','ホームページURL','サイト','WEBサイト']);
+  if(iName<0 && iUrl<0){ toast('「クリニック名」または「HP URL」の列が必要です'); return; }
+  const iDept = findCol(['診療科','科目','診療科目']);
   const idx = n => head.indexOf(n);
-  if(idx('クリニック名')<0){ toast('「クリニック名」列が見つかりません'); return; }
-  const existing = new Set(clinics.map(c=>c.name));
+  const existingNames = new Set(clinics.map(c=>c.name));
+  const existingUrls = new Set(clinics.map(c=>(c.hp_url||'').replace(/\/$/,'')).filter(Boolean));
   const CTM_KEYS = ['コンセプト','専門・資格','経歴','発信','新着','拡大シグナル'];
+  const hostName = u => { try{ return new URL(u).hostname; }catch(e){ return ''; } };
   const recs = rows.slice(1).map(r=>{
     const g = n => idx(n)>=0 ? (r[idx(n)]||'').trim() : '';
+    const name = iName>=0 ? (r[iName]||'').trim() : '';
+    const url = iUrl>=0 ? (r[iUrl]||'').trim() : '';
     const ctm = {}; CTM_KEYS.forEach(k=>{ if(g(k)) ctm[k]=g(k); });
-    return { name:g('クリニック名'), department:g('診療科'), send_channel:g('送信手段'),
-      email:g('メアド'), form_url:g('フォームURL'), captcha:g('CAPTCHA')==='あり',
-      director_name:g('院長名'), hp_url:g('HP URL'), hp_excerpt:g('HP抜粋').slice(0,2000),
-      ctm, status:g('状況')||'未送信' };
-  }).filter(r=>r.name && !existing.has(r.name));
+    return { name: name || (url ? '（名称未取得）'+hostName(url) : ''),
+      department: iDept>=0 ? (r[iDept]||'').trim() : g('診療科'),
+      send_channel:g('送信手段'), email:g('メアド'), form_url:g('フォームURL'),
+      captcha:g('CAPTCHA')==='あり', director_name:g('院長名'),
+      hp_url:url, hp_excerpt:g('HP抜粋').slice(0,2000), ctm, status:g('状況')||'未送信' };
+  }).filter(r=>(r.name||r.hp_url))
+    .filter(r=>!existingNames.has(r.name) && !(r.hp_url && existingUrls.has(r.hp_url.replace(/\/$/,''))));
   if(!recs.length){ toast('追加対象なし（全て登録済み）'); return; }
   const { error } = await sb.from('clinics').insert(recs);
   if(error){ toast('取込失敗: '+error.message); return; }
-  toast(recs.length+'件を追加しました'); await loadAll();
+  toast(recs.length+'件を追加しました。HP無しの院は「選択をHP補完」→「導線調査」の順で埋めてください');
+  await loadAll();
 };
 $('csvOut').onclick = async ()=>{
   const { data: logs } = await sb.from('send_log').select('*');
