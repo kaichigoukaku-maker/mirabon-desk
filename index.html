@@ -289,7 +289,7 @@ function buildFilters(){
 function filtered(){
   const q=$('fQ').value.trim(), d=$('fDept').value, ch=$('fCh').value, st=$('fSt').value, pr=$('fPr').value;
   return clinics.filter(c=>
-    (!q || (c.name||'').includes(q)) &&
+    (!q || (c.name||'').includes(q) || (c.ig_name||'').includes(q)) &&
     (!d || c.department===d) &&
     (!ch || c.send_channel===ch) &&
     (!st || c.status===st) &&
@@ -308,6 +308,7 @@ function renderList(){
         <span>${esc(c.department||'—')}</span>
         <span>${esc(c.send_channel||'—')}${c.captcha?'（CAPTCHA）':''}</span>
         ${c.director_name?`<span>院長: ${esc(c.director_name)}</span>`:''}
+        ${c.ig_name && c.ig_name!==c.name?`<span>IG: ${esc(c.ig_name)}</span>`:''}
       </span>
     </div>`).join('') || '<div class="status">該当なし</div>';
 }
@@ -706,18 +707,27 @@ function parseCSV(text){
 /* ============ 一括処理（1件ずつ独立したパイプライン・同時2件・混雑時は1回だけ再試行） ============ */
 async function researchOne(c){
   const r = await callFn('research', { url: c.hp_url });
-  const patch = { send_channel: r.channel, research: r, captcha: !!r.captcha };
+  const patch = { send_channel: r.channel, research: Object.assign({}, c.research||{}, r), captcha: !!r.captcha };
   if(r.email) patch.email = r.email;
   if(r.form_url) patch.form_url = r.form_url;
+  // 名前が未取得プレースホルダのままなら、HPタイトルから正式名称を入れる
+  if(r.title && /^（名称未取得）/.test(c.name||'')){
+    patch.name = r.title.split(/[|｜]/)[0].trim() || c.name;
+  }
   const { error } = await sb.from('clinics').update(patch).eq('id', c.id);
   if(error) throw new Error(error.message);
   Object.assign(c, patch);
 }
 async function hpOne(c){
-  const r = await callFn('findhp', { name: c.name });
+  const r = await callFn('findhp', { name: c.ig_name || c.name });
   const research = Object.assign({}, c.research||{}, { findhp: r });
   const patch = { research };
   if(r.url) patch.hp_url = r.url;
+  // リストの名前はIG名のことが多い → HP側の正式名称が取れて照合OKなら name を正式名称に差し替え、元の名前は ig_name に保持
+  if(r.url && r.verified && r.official_name && r.official_name !== c.name){
+    patch.ig_name = c.ig_name || c.name;
+    patch.name = r.official_name;
+  }
   if(r.url && !r.verified) patch.notes = ((c.notes||'')+'\n⚠HP要確認: '+(r.evidence||'')).trim();
   if(!r.url) patch.notes = ((c.notes||'')+'\n'+(r.evidence||'HP特定できず')).trim();
   const { error } = await sb.from('clinics').update(patch).eq('id', c.id);
@@ -761,7 +771,7 @@ $('csvFile').onchange = async e=>{
   const head = rows[0].map(h=>h.trim());
   const findCol = names => { for(const n of names){ const i = head.indexOf(n); if(i>=0) return i; } return -1; };
   // クリニック名 or HP URL のどちらかがあれば取り込める（足りない側は「HP補完」「導線調査」で埋める）
-  const iName = findCol(['クリニック名','名前','医院名','施設名','クリニック','院名']);
+  const iName = findCol(['クリニック名','名前','医院名','施設名','クリニック','院名','Instagram名','IG名','アカウント名']);
   const iUrl  = findCol(['HP URL','HP','URL','ホームページ','ホームページURL','サイト','WEBサイト']);
   if(iName<0 && iUrl<0){ toast('「クリニック名」または「HP URL」の列が必要です'); return; }
   const iDept = findCol(['診療科','科目','診療科目']);
