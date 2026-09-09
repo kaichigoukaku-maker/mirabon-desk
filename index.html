@@ -401,7 +401,8 @@ function renderDetail(){
   const ctm = c.ctm || {};
   const youChips = ['コンセプト','専門・資格','経歴','発信'].filter(k=>ctm[k]);
   const nowRaw = ['新着','拡大シグナル'].filter(k=>ctm[k]);
-  const contact = c.form_url || (c.email?'mailto:'+c.email:null) || c.hp_url;
+  // 問い合わせ先はフォームURL/メールが確定しているときだけ。HPトップへのフォールバックは誤解のもと（予約ページ等に飛ぶ）なのでしない
+  const contact = c.form_url || (c.email?'mailto:'+c.email:null);
   $('detail').innerHTML = `
     <div class="dhead">
       <h2 class="serif">${c.priority?'★ ':''}${esc(c.name)}</h2>
@@ -409,7 +410,7 @@ function renderDetail(){
     </div>
     <div class="btns">
       ${c.hp_url?`<a href="${esc(c.hp_url)}" target="_blank" rel="noopener"><button class="mini">HPを開く</button></a>`:''}
-      ${contact?`<a href="${esc(contact)}" target="_blank" rel="noopener"><button class="mini">問い合わせ先を開く</button></a>`:''}
+      ${contact?`<a href="${esc(contact)}" target="_blank" rel="noopener"><button class="mini">問い合わせ先を開く${c.captcha?'（CAPTCHA）':''}</button></a>`:(c.hp_url?`<span class="pill dim" title="「導線を調査」でフォーム/メールを特定してください">問い合わせ先 未調査</span>`:'')}
       <select id="dStatus" style="width:auto;padding:4px 8px;font-size:12px">
         ${['未送信','送信済','返信あり','アポ','辞退','NG'].map(s=>`<option${c.status===s?' selected':''}>${s}</option>`).join('')}
       </select>
