@@ -215,7 +215,7 @@ th{font-size:11px;color:var(--sub);letter-spacing:.08em;border-top:none}
       <div class="btns"><button id="myPwBtn" class="mini">変更する</button><span class="status" id="myPwStat"></span></div>
     </div>
     <h2 class="sec">AI生成の設定</h2>
-    <p style="font-size:13px">AI文面生成にはSupabaseのSecretsに <b>ANTHROPIC_API_KEY</b> の設定が必要です（管理者作業）。モデルは <b>GENERATE_MODEL</b> で変更可（既定: claude-sonnet-5）。未設定の間も、材料チップと手書きで文面は作れます。</p>
+    <p style="font-size:13px">AI文面生成・HP補完はKimi（Moonshot AI）を使います。SupabaseのSecretsに <b>MOONSHOT_API_KEY</b> の設定が必要です（管理者作業。キーは https://platform.kimi.ai で発行）。モデルは <b>GENERATE_MODEL</b> で変更可（既定: kimi-k3＝最上位モデル）。未設定の間も、材料チップと手書きで文面は作れます。</p>
   </section>
 </main>
 </div>
