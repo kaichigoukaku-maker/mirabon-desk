@@ -736,12 +736,24 @@ async function researchOne(c){
   Object.assign(c, patch);
 }
 async function hpOne(c){
-  // 候補を探して research.findhp に保存するだけ。hp_url・名前の確定は人が「採用」を押したときのみ（承認式）
-  const r = await callFn('findhp', { name: c.ig_name || c.name, address: c.address || '', phone: c.phone || '' });
-  const research = Object.assign({}, c.research||{}, { findhp: r });
-  const { error } = await sb.from('clinics').update({ research }).eq('id', c.id);
+  // リスト補完型：照合が通れば自動でHP URL・正式名称を確定。⚠付きだけ承認待ちに残す（2026-09-09 実測12件で誤特定0を確認して解禁）
+  const r = await callFn('findhp', { name: c.ig_name || c.name, address: c.address || '', phone: c.phone || '', ig_url: c.ig_url || '' });
+  const ev = Array.isArray(r.evidence) ? r.evidence : [r.evidence].filter(Boolean);
+  const nameOk = ev.some(x=>/名前の照合OK/.test(x));
+  const hasWarn = ev.some(x=>/⚠/.test(x));
+  const auto = r.url && !hasWarn && (r.verified || nameOk);
+  const patch = { research: Object.assign({}, c.research||{}, { findhp: Object.assign({}, r, auto?{auto_adopted:true}:{}) }) };
+  if(auto){
+    patch.hp_url = r.url;
+    const official = (r.official_name||'').trim();
+    if(official && official !== c.name && official.length <= 40){
+      patch.ig_name = c.ig_name || c.name;
+      patch.name = official;
+    }
+  }
+  const { error } = await sb.from('clinics').update(patch).eq('id', c.id);
   if(error) throw new Error(error.message);
-  c.research = research;
+  Object.assign(c, patch);
 }
 async function approveHp(c){
   const r = (c.research||{}).findhp || {};
@@ -794,7 +806,7 @@ async function runBatch(btn, items, fn, label, doneMsg){
 }
 $('aiBatch').onclick = ()=>runBatch($('aiBatch'), selected().filter(c=>c.hp_url), genOne, 'AI生成', '「文面✓」の院を開いて検品→送信してください。');
 $('resBatch').onclick = ()=>runBatch($('resBatch'), selected().filter(c=>c.hp_url), researchOne, '導線調査', '送信手段が4分類に更新されました。');
-$('hpBatch').onclick = ()=>runBatch($('hpBatch'), selected().filter(c=>!c.hp_url), hpOne, 'HP候補さがし', '自動では書き込みません。「HP候補（承認待ち）」フィルタで1件ずつ採用／却下してください。');
+$('hpBatch').onclick = ()=>runBatch($('hpBatch'), selected().filter(c=>!c.hp_url), hpOne, 'HP補完', '照合OKは自動確定済み。「HP候補（承認待ち）」フィルタに残った⚠だけ目視で採用／却下してください。');
 
 $('csvIn').onclick = ()=>$('csvFile').click();
 $('csvFile').onchange = async e=>{
@@ -809,6 +821,7 @@ $('csvFile').onchange = async e=>{
   const iDept = findCol(['診療科','科目','診療科目']);
   const iPhone = findCol(['電話','電話番号','TEL','Tel','tel']);
   const iAddr = findCol(['住所','所在地','エリア','地域','市区町村']);
+  const iIg = findCol(['Instagram URL','インスタURL','IG URL','Instagram','インスタ','アカウントURL']);
   const idx = n => head.indexOf(n);
   const existingNames = new Set(clinics.map(c=>c.name));
   const existingUrls = new Set(clinics.map(c=>(c.hp_url||'').replace(/\/$/,'')).filter(Boolean));
@@ -825,6 +838,7 @@ $('csvFile').onchange = async e=>{
       captcha:g('CAPTCHA')==='あり', director_name:g('院長名'),
       phone: iPhone>=0 ? (r[iPhone]||'').trim() : '',
       address: iAddr>=0 ? (r[iAddr]||'').trim() : '',
+      ig_url: iIg>=0 ? (r[iIg]||'').trim() : '',
       hp_url:url, hp_excerpt:g('HP抜粋').slice(0,2000), ctm, status:g('状況')||'未送信' };
   }).filter(r=>(r.name||r.hp_url))
     .filter(r=>!existingNames.has(r.name) && !(r.hp_url && existingUrls.has(r.hp_url.replace(/\/$/,''))));
