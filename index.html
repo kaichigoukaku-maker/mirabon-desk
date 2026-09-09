@@ -1,0 +1,707 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>診ラボン文面デスク</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📮</text></svg>">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Shippori+Mincho:wght@500;700&display=swap">
+<style>
+:root{
+  --paper:#f7f8f6; --sheet:#ffffff; --ink:#1c2422; --sub:#5c6763;
+  --line:#dce2de; --accent:#0e6e63; --accent-ink:#0a5049; --accent-weak:#e2efec;
+  --ok:#0e6e63; --bad:#b3362c; --bad-weak:#f9e9e7; --warn:#8a5a08; --warn-weak:#f6ecd9;
+}
+@media (prefers-color-scheme: dark){
+  :root{
+    --paper:#161b19; --sheet:#1e2422; --ink:#e8ebe9; --sub:#95a09b;
+    --line:#38423e; --accent:#4cc2b4; --accent-ink:#7ad6ca; --accent-weak:#1e3a36;
+    --ok:#4cc2b4; --bad:#e2857b; --bad-weak:#3d2422; --warn:#d9a94e; --warn-weak:#3a2f18;
+  }
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--paper);color:var(--ink);
+  font-family:-apple-system,"Hiragino Sans","Yu Gothic",sans-serif;font-size:14px;line-height:1.7}
+.serif{font-family:"Shippori Mincho","Hiragino Mincho ProN",serif}
+[hidden]{display:none!important}
+header{display:flex;align-items:center;gap:14px;padding:12px 22px;border-bottom:1px solid var(--line);flex-wrap:wrap}
+header h1{margin:0;font-size:17px;font-weight:700}
+header .tag{font-size:11px;color:var(--sub);letter-spacing:.1em}
+header .sp{flex:1}
+.tabs{display:inline-flex;border:1px solid var(--line);border-radius:6px;overflow:hidden}
+.tabs button{border:none;border-radius:0;padding:6px 16px;background:var(--sheet);color:var(--ink);cursor:pointer;font-family:inherit;font-size:13px}
+.tabs button.on{background:var(--accent-weak);color:var(--accent-ink);font-weight:700}
+.uinfo{font-size:12px;color:var(--sub)}
+button{font-family:inherit;font-size:13px;padding:7px 14px;border:1px solid var(--line);
+  border-radius:6px;background:var(--sheet);color:var(--ink);cursor:pointer}
+button:hover{border-color:var(--accent)}
+button.primary{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:700}
+button.primary:hover{background:var(--accent-ink)}
+button.mini{padding:3px 10px;font-size:12px}
+button:disabled{opacity:.45;cursor:default}
+input[type=text],input[type=email],input[type=password],textarea,select{width:100%;font-family:inherit;font-size:13px;color:var(--ink);
+  background:var(--sheet);border:1px solid var(--line);border-radius:6px;padding:8px 10px;line-height:1.6}
+textarea{resize:vertical}
+input:focus,textarea:focus,select:focus,button:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+label{display:block;font-size:11px;font-weight:700;color:var(--sub);letter-spacing:.1em;margin:14px 0 5px}
+main{display:grid;grid-template-columns:minmax(300px,380px) 1fr;min-height:calc(100vh - 55px)}
+@media(max-width:880px){main{grid-template-columns:1fr}}
+.pane{padding:16px 20px}
+.pane.in{border-right:1px solid var(--line)}
+@media(max-width:880px){.pane.in{border-right:none;border-bottom:1px solid var(--line)}}
+/* ログイン */
+.authbox{max-width:360px;margin:80px auto;background:var(--sheet);border:1px solid var(--line);border-radius:10px;padding:26px}
+.authbox h1{font-size:18px;margin:0 0 4px}
+.authbox .tag{font-size:11px;color:var(--sub)}
+.err{color:var(--bad);font-size:12.5px;margin-top:10px}
+.okmsg{color:var(--ok);font-size:12.5px;margin-top:10px}
+/* リスト */
+.filters{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px}
+.filters select{width:auto;padding:5px 8px;font-size:12px}
+.filters input[type=text]{flex:1;min-width:120px;padding:5px 8px;font-size:12px}
+.crow{display:grid;grid-template-columns:1fr auto;gap:4px 8px;padding:8px 10px;border:1px solid var(--line);
+  border-radius:6px;margin-bottom:6px;cursor:pointer;background:var(--sheet);font-size:12.5px}
+.crow:hover{border-color:var(--accent)}
+.crow.sel{border-color:var(--accent);background:var(--accent-weak)}
+.crow .nm{font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.crow .meta{grid-column:1/-1;color:var(--sub);font-size:11.5px;display:flex;gap:8px;flex-wrap:wrap}
+.pill{display:inline-block;font-size:10.5px;font-weight:700;padding:0 7px;border-radius:99px;background:var(--accent-weak);color:var(--accent-ink)}
+.pill.warn{background:var(--warn-weak);color:var(--warn)}
+.pill.bad{background:var(--bad-weak);color:var(--bad)}
+.pill.dim{background:var(--paper);color:var(--sub)}
+.lcount{font-size:11.5px;color:var(--sub);margin:4px 0 8px}
+/* 詳細 */
+h2.sec{font-size:12px;font-weight:700;color:var(--sub);letter-spacing:.14em;margin:20px 0 8px}
+h2.sec:first-child{margin-top:0}
+.dhead{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
+.dhead h2{margin:0;font-size:18px}
+.dhead .sub{font-size:12px;color:var(--sub)}
+.btns{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;align-items:center}
+.chips{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}
+.chip{font-size:12px;padding:4px 10px;border:1px solid var(--line);border-radius:99px;background:var(--sheet);cursor:pointer;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.chip:hover{border-color:var(--accent)}
+.chip .k{font-weight:700;color:var(--accent-ink);margin-right:4px}
+.chip.ng{opacity:.55;cursor:default}
+.sheet{background:var(--sheet);border:1px solid var(--line);border-radius:8px;padding:4px;margin-top:8px}
+#letter{border:none;background:transparent;min-height:320px;font-size:13.5px;padding:12px;width:100%}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:6px;overflow:hidden}
+.seg button{border:none;border-radius:0;padding:5px 13px}
+.seg button.on{background:var(--accent-weak);color:var(--accent-ink);font-weight:700}
+.krow{display:grid;grid-template-columns:96px 1fr;gap:10px;padding:8px 2px;border-top:1px solid var(--line);font-size:12.5px}
+.krow .k{color:var(--sub);font-weight:700}
+.dan{display:inline-block;font-size:11px;font-weight:700;padding:0 7px;border-radius:99px;background:var(--accent-weak);color:var(--accent-ink);margin-right:6px}
+.quote{display:grid;grid-template-columns:20px 1fr;gap:8px;padding:8px 10px;border-radius:6px;font-size:12.5px;margin-top:6px;background:var(--accent-weak)}
+.quote.bad{background:var(--bad-weak)}
+.quote .m{font-weight:700;color:var(--ok)}
+.quote.bad .m{color:var(--bad)}
+.alert{border-radius:6px;padding:9px 12px;font-size:12.5px;margin-top:8px}
+.alert.bad{background:var(--bad-weak);color:var(--bad)}
+.alert.warn{background:var(--warn-weak);color:var(--warn)}
+.status{font-size:12.5px;color:var(--sub);margin:8px 0}
+.status b{color:var(--accent-ink)}
+.excerpt{font-size:12px;color:var(--sub);background:var(--sheet);border:1px solid var(--line);border-radius:6px;padding:8px 10px;max-height:120px;overflow:auto;white-space:pre-wrap}
+/* 集計 */
+.cards{display:flex;gap:10px;flex-wrap:wrap;margin:10px 0}
+.card{background:var(--sheet);border:1px solid var(--line);border-radius:8px;padding:12px 18px;min-width:110px}
+.card .n{font-size:24px;font-weight:700;font-variant-numeric:tabular-nums}
+.card .l{font-size:11px;color:var(--sub);font-weight:700;letter-spacing:.08em}
+table{border-collapse:collapse;width:100%;font-size:13px;background:var(--sheet);border:1px solid var(--line);border-radius:8px}
+th,td{padding:8px 12px;border-top:1px solid var(--line);text-align:left;font-variant-numeric:tabular-nums}
+th{font-size:11px;color:var(--sub);letter-spacing:.08em;border-top:none}
+.toast{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);background:var(--ink);color:var(--paper);
+  padding:8px 18px;border-radius:99px;font-size:12.5px;opacity:0;transition:.2s;pointer-events:none;z-index:9}
+.toast.on{opacity:1}
+.foot{font-size:11.5px;color:var(--sub);margin-top:20px;border-top:1px solid var(--line);padding-top:10px}
+.setrow{margin-bottom:4px}
+</style>
+</head>
+<body>
+
+<!-- ログイン -->
+<div id="authView" hidden>
+  <div class="authbox">
+    <h1 class="serif">診ラボン文面デスク</h1>
+    <div class="tag">ウェルス・コンサルティング｜取材依頼チーム用</div>
+    <div id="loginForm">
+      <label>メールアドレス</label>
+      <input type="email" id="aEmail" autocomplete="username">
+      <label>パスワード</label>
+      <input type="password" id="aPw" autocomplete="current-password">
+      <div class="btns">
+        <button class="primary" id="aLogin">ログイン</button>
+        <button id="aReset" class="mini">パスワード再設定メール</button>
+      </div>
+    </div>
+    <div id="setPwForm" hidden>
+      <p style="font-size:13px">新しいパスワードを設定してください（8文字以上）。</p>
+      <label>新しいパスワード</label>
+      <input type="password" id="aNewPw" autocomplete="new-password">
+      <div class="btns"><button class="primary" id="aSetPw">設定してはじめる</button></div>
+    </div>
+    <div class="err" id="aErr"></div>
+    <div class="okmsg" id="aOk"></div>
+  </div>
+</div>
+
+<!-- アプリ本体 -->
+<div id="appView" hidden>
+<header>
+  <h1 class="serif">診ラボン文面デスク</h1>
+  <span class="tag">取材依頼 — HPの原文だけから書く</span>
+  <span class="sp"></span>
+  <nav class="tabs" id="tabs">
+    <button data-t="list" class="on">リスト</button>
+    <button data-t="stats">集計</button>
+    <button data-t="settings">設定</button>
+  </nav>
+  <span class="uinfo" id="uEmail"></span>
+  <button class="mini" id="logout">ログアウト</button>
+</header>
+
+<main id="tList">
+  <section class="pane in">
+    <div class="filters">
+      <input type="text" id="fQ" placeholder="クリニック名で検索">
+      <select id="fDept"><option value="">診療科</option></select>
+      <select id="fCh"><option value="">送信手段</option></select>
+      <select id="fSt"><option value="">状況</option>
+        <option>未送信</option><option>送信済</option><option>返信あり</option><option>アポ</option><option>辞退</option><option>NG</option></select>
+      <select id="fPr"><option value="">すべて</option><option value="1">★のみ</option><option value="sendable">送れる先のみ</option></select>
+    </div>
+    <div class="lcount" id="lCount"></div>
+    <div id="clist"></div>
+    <div class="btns">
+      <button class="mini" id="csvIn">CSV取込</button>
+      <button class="mini" id="csvOut">CSV書き出し</button>
+      <input type="file" id="csvFile" accept=".csv" hidden>
+    </div>
+  </section>
+
+  <section class="pane" id="detail">
+    <div class="status">左のリストからクリニックを選んでください。</div>
+  </section>
+</main>
+
+<main id="tStats" hidden style="display:block">
+  <section class="pane">
+    <h2 class="sec">送信・返信の実績</h2>
+    <div class="cards" id="statCards"></div>
+    <h2 class="sec">文面タイプ別（CTM × 汎用の比較）</h2>
+    <div style="overflow-x:auto"><table id="statTable"></table></div>
+    <div class="foot">返信率は「返信あり＋アポ」÷ 送信数。20件たまった時点でCTM×汎用を比較する（decisions.md 2026-08-27）。</div>
+  </section>
+</main>
+
+<main id="tSettings" hidden style="display:block">
+  <section class="pane" style="max-width:760px">
+    <h2 class="sec">固定文（一字も揺らさない部分。変更はここ1箇所）</h2>
+    <div id="setForm"></div>
+    <div class="btns"><button class="primary" id="setSave">保存</button><span class="status" id="setStat"></span></div>
+    <h2 class="sec">チームメンバーの追加</h2>
+    <p style="font-size:13px">Supabaseダッシュボード → Authentication → Users → <b>Add user → Create new user</b> でメールアドレスとパスワードを入力して作成し、本人に伝えてください（自由登録は無効化済み）。本人はログイン後、下の「パスワード変更」で自分のパスワードに変えられます。</p>
+    <h2 class="sec">パスワード変更（ログイン中の自分）</h2>
+    <div style="max-width:320px">
+      <input type="password" id="myNewPw" placeholder="新しいパスワード（8文字以上）" autocomplete="new-password">
+      <div class="btns"><button id="myPwBtn" class="mini">変更する</button><span class="status" id="myPwStat"></span></div>
+    </div>
+    <h2 class="sec">AI生成の設定</h2>
+    <p style="font-size:13px">AI文面生成にはSupabaseのSecretsに <b>ANTHROPIC_API_KEY</b> の設定が必要です（管理者作業）。モデルは <b>GENERATE_MODEL</b> で変更可（既定: claude-sonnet-5）。未設定の間も、材料チップと手書きで文面は作れます。</p>
+  </section>
+</main>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script>
+const SB_URL = 'https://brnshjqnbspcatnkbtky.supabase.co';
+const SB_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJybnNoanFuYnNwY2F0bmtidGt5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODg5MzYyMzEsImV4cCI6MjEwNDUxMjIzMX0.3cBjEfH911K8Y7eLFdsvu9t6y74qGrWGeECE66BZ7bc';
+const inviteFlow = /type=(invite|recovery|signup)/.test(location.hash);
+const sb = window.supabase.createClient(SB_URL, SB_ANON);
+const $ = id => document.getElementById(id);
+const esc = s => String(s??'').replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+function toast(m){ const t=$('toast'); t.textContent=m; t.classList.add('on'); setTimeout(()=>t.classList.remove('on'),1800); }
+
+/* ============ 状態 ============ */
+let clinics = [], CONST = {}, sel = null, view = 'mail', user = null;
+const genCache = {};   // clinic_id -> {result, src}
+
+/* ============ 認証 ============ */
+async function boot(){
+  const { data:{ session } } = await sb.auth.getSession();
+  if(session && inviteFlow){ user = session.user; showSetPw(); return; }
+  if(session){ user = session.user; await enter(); }
+  else showLogin();
+}
+function showLogin(){ $('authView').hidden=false; $('appView').hidden=true; $('loginForm').hidden=false; $('setPwForm').hidden=true; }
+function showSetPw(){ $('authView').hidden=false; $('appView').hidden=true; $('loginForm').hidden=true; $('setPwForm').hidden=false; }
+async function enter(){
+  $('authView').hidden=true; $('appView').hidden=false;
+  $('uEmail').textContent = user.email;
+  await loadAll();
+}
+$('aLogin').onclick = async ()=>{
+  $('aErr').textContent=''; $('aOk').textContent='';
+  const { data, error } = await sb.auth.signInWithPassword({ email:$('aEmail').value.trim(), password:$('aPw').value });
+  if(error){ $('aErr').textContent = 'ログインできません：' + error.message; return; }
+  user = data.user; await enter();
+};
+$('aReset').onclick = ()=>{
+  $('aOk').textContent = 'パスワードを忘れた場合は管理者（嶋崎）に連絡してください。ダッシュボードから再設定できます。';
+};
+$('aSetPw').onclick = async ()=>{
+  const pw = $('aNewPw').value;
+  if(pw.length < 8){ $('aErr').textContent='8文字以上にしてください'; return; }
+  const { error } = await sb.auth.updateUser({ password: pw });
+  if(error){ $('aErr').textContent = error.message; return; }
+  history.replaceState(null,'',location.pathname);
+  await enter();
+};
+$('logout').onclick = async ()=>{ await sb.auth.signOut(); location.reload(); };
+
+/* ============ データ読込 ============ */
+async function loadAll(){
+  const [c, s] = await Promise.all([
+    sb.from('clinics').select('*').order('name').limit(1000),
+    sb.from('app_settings').select('*').eq('key','constants').single()
+  ]);
+  if(c.error){ toast('リスト取得に失敗: '+c.error.message); return; }
+  clinics = c.data || [];
+  CONST = (s.data && s.data.value) || {};
+  buildFilters(); renderList();
+}
+function buildFilters(){
+  const depts = [...new Set(clinics.map(x=>x.department).filter(Boolean))].sort();
+  const chs = [...new Set(clinics.map(x=>x.send_channel).filter(Boolean))].sort();
+  $('fDept').innerHTML = '<option value="">診療科</option>' + depts.map(d=>`<option>${esc(d)}</option>`).join('');
+  $('fCh').innerHTML = '<option value="">送信手段</option>' + chs.map(d=>`<option>${esc(d)}</option>`).join('');
+}
+function filtered(){
+  const q=$('fQ').value.trim(), d=$('fDept').value, ch=$('fCh').value, st=$('fSt').value, pr=$('fPr').value;
+  return clinics.filter(c=>
+    (!q || (c.name||'').includes(q)) &&
+    (!d || c.department===d) &&
+    (!ch || c.send_channel===ch) &&
+    (!st || c.status===st) &&
+    (pr!=='1' || c.priority) &&
+    (pr!=='sendable' || ['メール','フォーム'].includes(c.send_channel))
+  );
+}
+function renderList(){
+  const list = filtered();
+  $('lCount').textContent = `${list.length} 件（全 ${clinics.length} 件）`;
+  $('clist').innerHTML = list.map(c=>`
+    <div class="crow${sel && sel.id===c.id?' sel':''}" data-id="${c.id}">
+      <span class="nm">${c.priority?'★ ':''}${esc(c.name)}</span>
+      <span class="pill ${c.status==='未送信'?'dim':(c.status==='NG'||c.status==='辞退'?'bad':(c.status==='送信済'?'warn':''))}">${esc(c.status||'')}</span>
+      <span class="meta">
+        <span>${esc(c.department||'—')}</span>
+        <span>${esc(c.send_channel||'—')}${c.captcha?'（CAPTCHA）':''}</span>
+        ${c.director_name?`<span>院長: ${esc(c.director_name)}</span>`:''}
+      </span>
+    </div>`).join('') || '<div class="status">該当なし</div>';
+}
+['fQ','fDept','fCh','fSt','fPr'].forEach(id=>{ $(id).addEventListener('input', renderList); });
+$('clist').addEventListener('click', e=>{
+  const row = e.target.closest('.crow'); if(!row) return;
+  sel = clinics.find(c=>c.id===row.dataset.id);
+  renderList(); renderDetail();
+});
+
+/* ============ 文面の組み立て（固定文は定数から。一字も揺らさない） ============ */
+function mediaBlock(dept){
+  // ⑦媒体の信用の直後に、診療科が合う掲載例を1件添える（定数 examples_text: 「科|院名|URL」を1行1科）
+  const F = CONST; let m = F.media||'';
+  const lines = (F.examples_text||'').split('\n').map(x=>x.split('|')).filter(x=>x.length>=3 && x[2].trim());
+  const hit = lines.find(([k])=>dept && dept.includes(k.trim()));
+  if(hit) m += '\n▼'+hit[0].trim()+'の掲載例：'+hit[1].trim()+'\n'+hit[2].trim();
+  return m;
+}
+function assemble(r, form, dept){
+  const F = CONST;
+  const to = (r.director||'').trim() ? r.director.trim()+' 先生' : '院長先生';
+  const youT=(r.why_you&&r.why_you.text||'').trim(), nowT=(r.why_now&&r.why_now.text||'').trim(), kaT=(r.kasetsu&&r.kasetsu.text||'').trim();
+  const p4 = kaT ? (kaT + (F.interview||'')) : (F.interviewSolo||'');
+  const timerex = F.timerex_url ? '\n\n▼日程調整\n'+F.timerex_url : '';
+  if(form){
+    return [ (r.clinic||'')+'\n'+to,
+      (F.greeting||'')+(r.concise?(F.concise||''):''),
+      [youT,nowT].filter(Boolean).join(''),
+      p4, mediaBlock(dept)+'\n'+(F.burden||''), (F.ask||'')+timerex, F.sign||''
+    ].filter(Boolean).join('\n\n');
+  }
+  return [ (r.clinic||'')+'\n'+to,
+    (F.greeting||'')+(r.concise?(F.concise||''):''),
+    youT||null, nowT||null, p4, mediaBlock(dept), F.burden||'', (F.ask||'')+timerex, F.sign||''
+  ].filter(Boolean).join('\n\n');
+}
+function normalize(s){ return (s||'').replace(/[\s　]/g,''); }
+function verifyQuotes(quotes, src){ const hay=normalize(src); return (quotes||[]).map(q=>({q, ok: q && hay.includes(normalize(q))})); }
+function danLabel(slot){
+  if(!slot) return '—';
+  if(!slot.dan) return `<span class="dan">省略</span>${esc(slot.basis||'')}`;
+  return `<span class="dan">段${slot.dan}</span>${esc(slot.basis||'')}`;
+}
+
+/* ============ 詳細画面 ============ */
+function fieldsResult(){
+  return {
+    clinic: sel.name,
+    director: $('dDirector') ? $('dDirector').value.trim() : (sel.director_name||''),
+    concise: $('dConcise') ? $('dConcise').checked : false,
+    why_you: { text: $('dYou').value.trim() },
+    why_now: { text: $('dNow').value.trim() },
+    kasetsu: { text: $('dKa').value.trim() },
+  };
+}
+function chipTpl(kind, v){
+  v = v.replace(/\s+/g,' ').trim();
+  switch(kind){
+    case 'コンセプト': return `貴院のウェブサイトで「${v}」と書かれているのを拝見し、その背景にあるお考えをぜひお伺いしたいと思いました。`;
+    case '専門・資格': return `${v}としてのご経験をふまえた診療について、ぜひお伺いしたいと思いました。`;
+    case '経歴': return `${v}というご経歴を拝見し、現在の診療に至るお考えをぜひお伺いしたいと思いました。`;
+    case '発信': return `${v}での発信を拝見し、患者さんに向けて言葉を届けようとされている姿勢が、記事という形とも重なるように思いました。`;
+    case '新着': return `${v}と拝見し、このタイミングでお話を伺えればと思いました。`;
+    default: return v;
+  }
+}
+function renderDetail(){
+  if(!sel){ $('detail').innerHTML = '<div class="status">左のリストからクリニックを選んでください。</div>'; return; }
+  const c = sel, g = genCache[c.id];
+  const ctm = c.ctm || {};
+  const youChips = ['コンセプト','専門・資格','経歴','発信'].filter(k=>ctm[k]);
+  const nowRaw = ['新着','拡大シグナル'].filter(k=>ctm[k]);
+  const contact = c.form_url || (c.email?'mailto:'+c.email:null) || c.hp_url;
+  $('detail').innerHTML = `
+    <div class="dhead">
+      <h2 class="serif">${c.priority?'★ ':''}${esc(c.name)}</h2>
+      <span class="sub">${esc(c.department||'')}／${esc(c.send_channel||'—')}${c.captcha?'（CAPTCHAあり）':''}</span>
+    </div>
+    <div class="btns">
+      ${c.hp_url?`<a href="${esc(c.hp_url)}" target="_blank" rel="noopener"><button class="mini">HPを開く</button></a>`:''}
+      ${contact?`<a href="${esc(contact)}" target="_blank" rel="noopener"><button class="mini">問い合わせ先を開く</button></a>`:''}
+      <select id="dStatus" style="width:auto;padding:4px 8px;font-size:12px">
+        ${['未送信','送信済','返信あり','アポ','辞退','NG'].map(s=>`<option${c.status===s?' selected':''}>${s}</option>`).join('')}
+      </select>
+      <button class="mini" id="dStar">${c.priority?'★解除':'★付与'}</button>
+    </div>
+    ${c.hp_excerpt?`<h2 class="sec">HP抜粋（Why you の材料）</h2><div class="excerpt">${esc(c.hp_excerpt)}</div>`:''}
+
+    <h2 class="sec">材料チップ（押すと下書きが入る。原文確認は必須）</h2>
+    <div class="chips">
+      ${youChips.map(k=>`<span class="chip" data-slot="you" data-k="${esc(k)}" data-v="${esc(ctm[k])}" title="${esc(ctm[k])}"><span class="k">${esc(k)}</span>${esc(ctm[k]).slice(0,42)}</span>`).join('')}
+      ${nowRaw.map(k=>{
+        const ng = /求人|採用/.test(ctm[k]);
+        return `<span class="chip${ng?' ng':''}" ${ng?'':`data-slot="now" data-k="新着" data-v="${esc(ctm[k])}"`} title="${esc(ctm[k])}"><span class="k">${esc(k)}${ng?'（求人はWhy now禁止）':''}</span>${esc(ctm[k]).slice(0,42)}</span>`;
+      }).join('')}
+      ${(!youChips.length && !nowRaw.length)?'<span class="status">CTM材料なし — AI取得を試すか、汎用文で送る</span>':''}
+    </div>
+
+    <h2 class="sec">個別化パート</h2>
+    <label>宛名（院長名。空欄なら「院長先生」）</label>
+    <input type="text" id="dDirector" value="${esc(c.director_name||'')}">
+    <label>Why you（あなただから）</label>
+    <textarea id="dYou" rows="3">${esc(g&&g.result&&g.result.why_you&&g.result.why_you.text||'')}</textarea>
+    <label>Why now（いまだから・任意。不自然なら空欄でよい）</label>
+    <textarea id="dNow" rows="2">${esc(g&&g.result&&g.result.why_now&&g.result.why_now.text||'')}</textarea>
+    <label>患者ニーズ仮説（読者の迷い・推測形で）</label>
+    <textarea id="dKa" rows="2">${esc(g&&g.result&&g.result.kasetsu&&g.result.kasetsu.text||'')}</textarea>
+    <div style="margin-top:8px;font-size:12.5px"><label style="display:inline;margin:0"><input type="checkbox" id="dConcise" style="vertical-align:-2px" ${g&&g.result&&g.result.concise?'checked':''}> 簡潔版（冒頭に断りを入れる）</label></div>
+    <div class="btns">
+      <button class="primary" id="dGen"${c.hp_url?'':' disabled title="HP URLなし"'}>AIで作成（HP取得→生成→検品）</button>
+      <button id="dAsm">文面に組み立てる</button>
+      <span class="status" id="dStat"></span>
+    </div>
+
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-top:18px">
+      <h2 class="sec" style="margin:0">原稿</h2>
+      <div style="display:flex;gap:8px;align-items:center">
+        <div class="seg" id="dSeg">
+          <button data-v="mail"${view==='mail'?' class="on"':''}>メール版</button>
+          <button data-v="form"${view==='form'?' class="on"':''}>フォーム版</button>
+        </div>
+        <button class="mini" id="dCopy">本文をコピー</button>
+        <button class="mini" id="dSubj">件名をコピー</button>
+        ${c.email?`<button class="mini" id="dGmail">Gmailで下書き</button>`:''}
+      </div>
+    </div>
+    <div class="sheet"><textarea id="letter" spellcheck="false" placeholder="「AIで作成」か「文面に組み立てる」でここに完成文面が入ります。手直しもこの欄で。"></textarea></div>
+
+    <div id="kenpin" hidden>
+      <h2 class="sec">検品</h2>
+      <div class="krow"><span class="k">診療の中心</span><span id="kCore">—</span></div>
+      <div class="krow"><span class="k">Why you</span><span id="kYou">—</span></div>
+      <div class="krow"><span class="k">Why now</span><span id="kNow">—</span></div>
+      <div class="krow"><span class="k">患者ニーズ仮説</span><span id="kKa">—</span></div>
+      <div class="krow"><span class="k">引用の照合</span><span id="kQuotes">—</span></div>
+      <div id="kAlerts"></div>
+    </div>
+
+    <div class="btns" style="margin-top:16px">
+      <button class="primary" id="dSent">送信済みにする（記録して次へ）</button>
+      <button id="dReply">返信あり</button>
+      <button id="dApo">アポ獲得</button>
+    </div>
+    <label>メモ</label>
+    <textarea id="dNotes" rows="2">${esc(c.notes||'')}</textarea>
+    <div class="btns"><button class="mini" id="dNotesSave">メモ保存</button></div>
+    <div class="foot">送信前チェック：引用が原文と一致しているか／Why nowが不自然でないか（無理なら空欄）／経営の目・感嘆語が混ざっていないか／1日20〜30件・10-12時/13-15時。</div>
+  `;
+  bindDetail();
+  if(g && g.result){ renderKenpin(g.result, g.src); }
+}
+function bindDetail(){
+  const c = sel;
+  document.querySelectorAll('.chip[data-slot]').forEach(ch=>{
+    ch.onclick = ()=>{
+      const t = chipTpl(ch.dataset.k, ch.dataset.v);
+      const target = ch.dataset.slot==='now' ? $('dNow') : $('dYou');
+      target.value = t; toast('下書きを入れました。原文と照らして直してください');
+    };
+  });
+  $('dStatus').onchange = async e=>{ await updClinic({status:e.target.value}); };
+  $('dStar').onclick = async ()=>{ await updClinic({priority:!c.priority}); renderDetail(); };
+  $('dSeg').onclick = e=>{
+    const b=e.target.closest('button'); if(!b) return;
+    view=b.dataset.v; [...$('dSeg').children].forEach(x=>x.classList.toggle('on',x===b));
+    doAssemble();
+  };
+  $('dAsm').onclick = doAssemble;
+  $('dGen').onclick = aiGenerate;
+  $('dCopy').onclick = async ()=>{ const t=$('letter').value; if(!t){toast('文面がありません');return;} await copy(t); toast(view==='mail'?'メール版をコピーしました':'フォーム版をコピーしました'); };
+  $('dSubj').onclick = async ()=>{ await copy(CONST.subject||''); toast('件名をコピーしました'); };
+  const gm = $('dGmail');
+  if(gm) gm.onclick = ()=>{
+    const u = 'https://mail.google.com/mail/?view=cm&to='+encodeURIComponent(c.email)
+      +'&su='+encodeURIComponent(CONST.subject||'')+'&body='+encodeURIComponent($('letter').value);
+    window.open(u,'_blank');
+  };
+  $('dSent').onclick = markSent;
+  $('dReply').onclick = ()=>markResult('返信あり','返信');
+  $('dApo').onclick = ()=>markResult('アポ','アポ');
+  $('dNotesSave').onclick = async ()=>{ await updClinic({notes:$('dNotes').value}); toast('メモを保存しました'); };
+}
+async function copy(t){ try{ await navigator.clipboard.writeText(t); }catch(e){ const ta=document.createElement('textarea'); ta.value=t; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); ta.remove(); } }
+async function updClinic(patch){
+  const { error } = await sb.from('clinics').update(patch).eq('id', sel.id);
+  if(error){ toast('保存失敗: '+error.message); return; }
+  Object.assign(sel, patch); renderList();
+}
+function doAssemble(){
+  const g = genCache[sel.id];
+  const base = (g && g.result) ? g.result : {};
+  const f = fieldsResult();
+  const r = Object.assign({}, base, f, { clinic: sel.name });
+  $('letter').value = assemble(r, view==='form', sel.department||'');
+  if(g && g.result) renderKenpin(Object.assign({},g.result,f), g.src);
+}
+function renderKenpin(r, src){
+  $('kenpin').hidden = false;
+  $('kCore').textContent = r.core || '—';
+  $('kYou').innerHTML = danLabel(r.why_you);
+  $('kNow').innerHTML = danLabel(r.why_now);
+  $('kKa').innerHTML = danLabel(r.kasetsu);
+  const checks = verifyQuotes(r.quotes, src||'');
+  const box = $('kQuotes');
+  if(!checks.length){ box.textContent = '引用なし（汎用文で構成）'; }
+  else box.innerHTML = checks.map(c=>`<div class="quote${c.ok?'':' bad'}"><span class="m">${c.ok?'✓':'✗'}</span><span>「${esc(c.q)}」${c.ok?'　原文と一致':'　<b>取得した本文に見つかりません — 送信前に必ず確認</b>'}</span></div>`).join('');
+  const alerts = [];
+  if(checks.some(c=>!c.ok)) alerts.push(['bad','原文と一致しない引用があります。該当箇所を直すか、引用を外してから送ってください。']);
+  (r.cautions||[]).forEach(c=>alerts.push(['warn',c]));
+  $('kAlerts').innerHTML = alerts.map(([k,m])=>`<div class="alert ${k}">${esc(m)}</div>`).join('');
+}
+
+/* ============ AI生成（scrape → generate → 検品） ============ */
+async function callFn(name, body){
+  const { data:{ session } } = await sb.auth.getSession();
+  const res = await fetch(SB_URL+'/functions/v1/'+name, {
+    method:'POST',
+    headers:{ 'Authorization':'Bearer '+session.access_token, 'apikey':SB_ANON, 'Content-Type':'application/json' },
+    body: JSON.stringify(body)
+  });
+  const j = await res.json().catch(()=>({error:'応答を解釈できません'}));
+  if(!res.ok) throw new Error(j.message || j.error || ('HTTP '+res.status));
+  return j;
+}
+async function aiGenerate(){
+  const c = sel;
+  $('dGen').disabled = true; $('dStat').textContent = 'HPを取得中…';
+  try{
+    const sc = await callFn('scrape', { url: c.hp_url });
+    $('dStat').textContent = `取得OK（${sc.pages.length}ページ）。生成中…（30秒前後）`;
+    const materials = Object.assign({}, c.ctm || {});
+    if(c.hp_excerpt) materials['HP抜粋'] = c.hp_excerpt;
+    const r = await callFn('generate', { source_text: sc.text, clinic_name: c.name, department: c.department, materials });
+    genCache[c.id] = { result: r, src: sc.text };
+    if(sel.id !== c.id) return;
+    $('dDirector').value = (r.director||'').trim() || c.director_name || '';
+    $('dYou').value = r.why_you && r.why_you.text || '';
+    $('dNow').value = r.why_now && r.why_now.text || '';
+    $('dKa').value = r.kasetsu && r.kasetsu.text || '';
+    $('dConcise').checked = !!r.concise;
+    doAssemble();
+    const bad = verifyQuotes(r.quotes, sc.text).filter(x=>!x.ok).length;
+    const retry = r.retried ? '（照合NGを検出→自動で作り直し済み）' : '';
+    $('dStat').innerHTML = bad ? `<b>生成完了${retry}。それでも照合NGの引用が ${bad} 件</b> — 検品欄を確認。` : `<b>生成完了${retry}。</b>引用は全て原文と一致。`;
+  }catch(e){
+    $('dStat').textContent = '失敗：' + e.message;
+  }finally{
+    if($('dGen')) $('dGen').disabled = false;
+  }
+}
+
+/* ============ 送信記録 ============ */
+async function markSent(){
+  const c = sel, g = genCache[c.id];
+  const body = $('letter').value.trim();
+  if(!body){ toast('文面が空です。先に組み立ててください'); return; }
+  const f = fieldsResult();
+  const draftType = f.why_you.text ? 'CTM' : '汎用';
+  const channel = view==='form' ? 'フォーム' : (c.send_channel==='フォーム'?'フォーム':'メール');
+  const { data: draft, error: e1 } = await sb.from('drafts').insert({
+    clinic_id: c.id, draft_type: draftType, format: view==='form'?'フォーム':'メール',
+    subject: CONST.subject||'', body,
+    why_you: f.why_you.text, why_now: f.why_now.text, patient_needs: f.kasetsu.text,
+    qa: g ? { core: g.result.core, quotes_check: verifyQuotes(g.result.quotes, g.src), cautions: g.result.cautions } : {},
+    model: g && g.result.model || null, created_by: user.id
+  }).select().single();
+  if(e1){ toast('保存失敗: '+e1.message); return; }
+  const { error: e2 } = await sb.from('send_log').insert({
+    clinic_id: c.id, draft_id: draft.id, channel, draft_type: draftType, created_by: user.id
+  });
+  if(e2){ toast('送信記録の保存失敗: '+e2.message); return; }
+  await updClinic({ status:'送信済', director_name: f.director || c.director_name });
+  toast(`送信済みで記録しました（${draftType}）`);
+  const list = filtered(); const i = list.findIndex(x=>x.id===c.id);
+  const next = list.slice(i+1).find(x=>x.status==='未送信');
+  if(next){ sel = next; renderList(); renderDetail(); }
+}
+async function markResult(status, result){
+  const c = sel;
+  const { data: logs } = await sb.from('send_log').select('id').eq('clinic_id', c.id).order('sent_at',{ascending:false}).limit(1);
+  if(logs && logs.length){
+    await sb.from('send_log').update({ result, replied_at: new Date().toISOString() }).eq('id', logs[0].id);
+  }
+  await updClinic({ status });
+  toast(status+' を記録しました'); renderDetail();
+}
+
+/* ============ タブ ============ */
+$('tabs').onclick = async e=>{
+  const b = e.target.closest('button'); if(!b) return;
+  [...$('tabs').children].forEach(x=>x.classList.toggle('on',x===b));
+  const t = b.dataset.t;
+  $('tList').hidden = t!=='list';
+  $('tStats').hidden = t!=='stats';
+  $('tSettings').hidden = t!=='settings';
+  if(t==='stats') renderStats();
+  if(t==='settings') renderSettings();
+};
+
+/* ============ 集計 ============ */
+async function renderStats(){
+  const { data: logs, error } = await sb.from('send_log').select('*');
+  if(error){ toast(error.message); return; }
+  const sent = logs.length;
+  const replied = logs.filter(l=>['返信','アポ'].includes(l.result)).length;
+  const apo = logs.filter(l=>l.result==='アポ').length;
+  $('statCards').innerHTML = [
+    ['送信', sent],['返信', replied],['アポ', apo],
+    ['返信率', sent?Math.round(replied/sent*1000)/10+'%':'—']
+  ].map(([l,n])=>`<div class="card"><div class="n">${n}</div><div class="l">${l}</div></div>`).join('');
+  const types = ['CTM','汎用'];
+  $('statTable').innerHTML = '<tr><th>文面タイプ</th><th>送信</th><th>返信</th><th>アポ</th><th>返信率</th></tr>' +
+    types.map(t=>{
+      const g = logs.filter(l=>l.draft_type===t);
+      const r = g.filter(l=>['返信','アポ'].includes(l.result)).length;
+      return `<tr><td>${t}</td><td>${g.length}</td><td>${r}</td><td>${g.filter(l=>l.result==='アポ').length}</td><td>${g.length?Math.round(r/g.length*1000)/10+'%':'—'}</td></tr>`;
+    }).join('');
+}
+
+/* ============ 設定 ============ */
+const SET_KEYS = [
+  ['subject','件名（メール用）'],['greeting','名乗り'],['concise','簡潔版の断り'],
+  ['interview','Why interview（仮説あり時の接続文）'],['interviewSolo','Why interview（仮説なし時）'],
+  ['media','媒体の信用'],['examples_text','掲載例（1行1科：科|院名|URL。診療科が合う院にだけ差し込まれる）'],
+  ['burden','相手の負担'],['ask','打診'],['sign','署名'],['timerex_url','TimeRex URL']
+];
+function renderSettings(){
+  $('setForm').innerHTML = SET_KEYS.map(([k,l])=>`
+    <div class="setrow"><label>${l}</label><textarea data-k="${k}" rows="${(CONST[k]||'').length>60?3:1}">${esc(CONST[k]||'')}</textarea></div>`).join('');
+}
+document.addEventListener('click', async e=>{
+  if(e.target.id !== 'myPwBtn') return;
+  const pw = $('myNewPw').value;
+  if(pw.length < 8){ $('myPwStat').textContent = '8文字以上にしてください'; return; }
+  const { error } = await sb.auth.updateUser({ password: pw });
+  $('myPwStat').textContent = error ? '失敗: '+error.message : '変更しました';
+  if(!error) $('myNewPw').value='';
+});
+$('setSave').onclick = async ()=>{
+  const v = {...CONST};
+  document.querySelectorAll('#setForm textarea').forEach(t=>{ v[t.dataset.k] = t.value.trim(); });
+  const { error } = await sb.from('app_settings').update({ value: v }).eq('key','constants');
+  $('setStat').textContent = error ? '保存失敗: '+error.message : '保存しました（全員に反映されます）';
+  if(!error) CONST = v;
+};
+
+/* ============ CSV ============ */
+function parseCSV(text){
+  const rows=[]; let row=[], cur='', q=false;
+  text = text.replace(/^﻿/,'');
+  for(let i=0;i<text.length;i++){
+    const ch=text[i];
+    if(q){ if(ch==='"'){ if(text[i+1]==='"'){cur+='"';i++;} else q=false; } else cur+=ch; }
+    else if(ch==='"') q=true;
+    else if(ch===','){ row.push(cur); cur=''; }
+    else if(ch==='\n'||ch==='\r'){ if(ch==='\r'&&text[i+1]==='\n')i++; row.push(cur); rows.push(row); row=[]; cur=''; }
+    else cur+=ch;
+  }
+  if(cur!==''||row.length){ row.push(cur); rows.push(row); }
+  return rows.filter(r=>r.some(c=>c.trim()));
+}
+$('csvIn').onclick = ()=>$('csvFile').click();
+$('csvFile').onchange = async e=>{
+  const file = e.target.files[0]; if(!file) return;
+  const rows = parseCSV(await file.text());
+  const head = rows[0];
+  const idx = n => head.indexOf(n);
+  if(idx('クリニック名')<0){ toast('「クリニック名」列が見つかりません'); return; }
+  const existing = new Set(clinics.map(c=>c.name));
+  const CTM_KEYS = ['コンセプト','専門・資格','経歴','発信','新着','拡大シグナル'];
+  const recs = rows.slice(1).map(r=>{
+    const g = n => idx(n)>=0 ? (r[idx(n)]||'').trim() : '';
+    const ctm = {}; CTM_KEYS.forEach(k=>{ if(g(k)) ctm[k]=g(k); });
+    return { name:g('クリニック名'), department:g('診療科'), send_channel:g('送信手段'),
+      email:g('メアド'), form_url:g('フォームURL'), captcha:g('CAPTCHA')==='あり',
+      director_name:g('院長名'), hp_url:g('HP URL'), hp_excerpt:g('HP抜粋').slice(0,2000),
+      ctm, status:g('状況')||'未送信' };
+  }).filter(r=>r.name && !existing.has(r.name));
+  if(!recs.length){ toast('追加対象なし（全て登録済み）'); return; }
+  const { error } = await sb.from('clinics').insert(recs);
+  if(error){ toast('取込失敗: '+error.message); return; }
+  toast(recs.length+'件を追加しました'); await loadAll();
+};
+$('csvOut').onclick = async ()=>{
+  const { data: logs } = await sb.from('send_log').select('*');
+  const last = {};
+  (logs||[]).forEach(l=>{ if(!last[l.clinic_id] || l.sent_at > last[l.clinic_id].sent_at) last[l.clinic_id]=l; });
+  const head = ['クリニック名','診療科','送信手段','メアド','フォームURL','CAPTCHA','院長名','HP URL','状況','送信日','文面タイプ','結果'];
+  const q = s => '"'+String(s??'').replace(/"/g,'""')+'"';
+  const lines = [head.map(q).join(',')].concat(filtered().map(c=>{
+    const l = last[c.id]||{};
+    return [c.name,c.department,c.send_channel,c.email,c.form_url,c.captcha?'あり':'',c.director_name,c.hp_url,c.status,
+      l.sent_at?l.sent_at.slice(0,10):'', l.draft_type||'', l.result||''].map(q).join(',');
+  }));
+  const blob = new Blob(['﻿'+lines.join('\n')], {type:'text/csv'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob); a.download = '診ラボン送信リスト.csv'; a.click();
+};
+
+sb.auth.onAuthStateChange((ev, session)=>{
+  if(ev==='PASSWORD_RECOVERY'){ user = session.user; showSetPw(); }
+});
+boot();
+</script>
+</body>
+</html>
