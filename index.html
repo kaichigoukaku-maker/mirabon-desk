@@ -181,6 +181,7 @@ th{font-size:11px;color:var(--sub);letter-spacing:.08em;border-top:none}
         <option value="miss">情報に欠けあり</option>
         <option value="full">情報◎（欠けなし）</option>
         <option value="cand">HP候補（承認待ち）</option>
+        <option value="nohp">HPなし（手貼り対象）</option>
         <option value="1">★のみ</option>
       </select>
     </div>
@@ -316,7 +317,8 @@ function filtered(){
     (pr!=='res' || rowState(c).researched) &&
     (pr!=='miss' || rowState(c).missing.length>0) &&
     (pr!=='full' || rowState(c).missing.length===0) &&
-    (pr!=='cand' || rowState(c).cand)
+    (pr!=='cand' || rowState(c).cand) &&
+    (pr!=='nohp' || (!c.hp_url && !rowState(c).cand))
   );
 }
 /* 1件の状態を判定（表示・フィルタ・集計で共通利用）
@@ -476,6 +478,25 @@ function renderDetail(){
       <button class="mini" id="dResearch"${c.hp_url?'':' disabled title="HP URLなし"'}>導線を調査</button>
     </div>
     ${(()=>{
+      // HPが無い院：自分で探して貼るためのミニパネル（IG・Google・電話番号検索を1クリックで開く）
+      if(c.hp_url) return '';
+      const f = c.research && c.research.findhp;
+      if(f && f.url && !f.rejected) return '';
+      const gq = encodeURIComponent((c.ig_name||c.name)+' '+(c.address||'')+' 公式');
+      const tq = c.phone ? encodeURIComponent(c.phone) : '';
+      return `<div class="alert warn"><b>HP未特定 — ご自分で探して貼ってください</b>
+        ${f ? `<br><span style="font-size:11.5px">自動探索の結果: ${esc(Array.isArray(f.evidence)?f.evidence.join(' / '):(f.evidence||'特定できず'))}</span>`:''}
+        <div class="btns" style="margin-top:8px">
+          ${c.ig_url?`<a href="${esc(c.ig_url)}" target="_blank" rel="noopener"><button class="mini">Instagramを開く（プロフィールにHPリンクあり）</button></a>`:''}
+          <a href="https://www.google.com/search?q=${gq}" target="_blank" rel="noopener"><button class="mini">Googleで名前検索</button></a>
+          ${tq?`<a href="https://www.google.com/search?q=${tq}" target="_blank" rel="noopener"><button class="mini">電話番号で検索（${esc(c.phone)}）</button></a>`:''}
+        </div>
+        <div style="display:flex;gap:8px;margin-top:8px">
+          <input type="text" id="dHpPaste" placeholder="見つけたHPのURLをここに貼る" style="flex:1">
+          <button class="primary mini" id="dHpPasteSave">保存</button>
+        </div></div>`;
+    })()}
+    ${(()=>{
       const f = c.research && c.research.findhp;
       if(!f || !f.url || c.hp_url || f.rejected) return '';
       const ev = Array.isArray(f.evidence) ? f.evidence : [f.evidence].filter(Boolean);
@@ -575,6 +596,14 @@ function bindDetail(){
   });
   $('dStatus').onchange = async e=>{ await updClinic({status:e.target.value}); };
   $('dStar').onclick = async ()=>{ await updClinic({priority:!c.priority}); renderDetail(); };
+  const paste = $('dHpPasteSave');
+  if(paste) paste.onclick = async ()=>{
+    const u = $('dHpPaste').value.trim();
+    if(!/^https?:\/\//.test(u)){ toast('https:// から始まるURLを貼ってください'); return; }
+    await updClinic({ hp_url: u });
+    toast('HPを保存しました。続けて「導線を調査」を押してください');
+    renderDetail();
+  };
   const hpOk = $('dHpOk'), hpNg = $('dHpNg');
   if(hpOk) hpOk.onclick = ()=>approveHp(c);
   if(hpNg) hpNg.onclick = ()=>rejectHp(c);
