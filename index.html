@@ -372,10 +372,26 @@ function renderList(){
       <span class="meta" style="gap:8px">${info}${meta?`<span>${meta}</span>`:''}</span>
     </div>`;
   }).join('') || '<div class="status">該当なし</div>';
+  updSelCount();
 }
-['fQ','fDept','fCh','fSt','fPr'].forEach(id=>{ $(id).addEventListener('input', renderList); });
 const selIds = new Set();
-function updSelCount(){ $('selCount').textContent = selIds.size ? `${selIds.size} 件選択中` : ''; }
+// 絞り込みを変えたら、表示から外れた院の選択は捨てる（選択＝いま見えているものだけ、を保証）
+function pruneSel(){
+  const ids = new Set(filtered().map(c=>c.id));
+  [...selIds].forEach(id=>{ if(!ids.has(id)) selIds.delete(id); });
+}
+['fQ','fDept','fCh','fSt','fPr'].forEach(id=>{
+  $(id).addEventListener('input', ()=>{ pruneSel(); renderList(); });
+  $(id).addEventListener('change', ()=>{ pruneSel(); renderList(); });
+});
+function updSelCount(){
+  const vis = filtered();
+  const n = vis.filter(c=>selIds.has(c.id)).length;
+  $('selCount').textContent = n ? `${n} 件選択中 / 表示中 ${vis.length} 件` : '';
+  const all = $('cbAll');
+  all.checked = n>0 && n===vis.length;
+  all.indeterminate = n>0 && n<vis.length;
+}
 $('clist').addEventListener('click', e=>{
   if(e.target.classList && e.target.classList.contains('cb')){
     const id = e.target.dataset.id;
