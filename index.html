@@ -44,11 +44,22 @@ input[type=text],input[type=email],input[type=password],textarea,select{width:10
 textarea{resize:vertical}
 input:focus,textarea:focus,select:focus,button:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
 label{display:block;font-size:11px;font-weight:700;color:var(--sub);letter-spacing:.1em;margin:14px 0 5px}
-main{display:grid;grid-template-columns:minmax(300px,380px) 1fr;min-height:calc(100vh - 55px)}
-@media(max-width:880px){main{grid-template-columns:1fr}}
-.pane{padding:16px 20px}
+/* 左右で独立スクロール：画面全体は固定し、各ペインの中だけが動く */
+#appView{height:100vh;display:flex;flex-direction:column;overflow:hidden}
+#appView > header{flex:none}
+main{flex:1 1 auto;min-height:0;display:grid;grid-template-columns:minmax(300px,380px) 1fr}
+#tStats,#tSettings{overflow-y:auto}
+.pane{padding:16px 20px;overflow-y:auto;min-height:0}
 .pane.in{border-right:1px solid var(--line)}
-@media(max-width:880px){.pane.in{border-right:none;border-bottom:1px solid var(--line)}}
+/* 絞り込みと一括ボタンはスクロールしても上に残す */
+.listhead{position:sticky;top:-16px;z-index:2;background:var(--paper);padding:16px 0 8px;margin:-16px 0 0}
+@media(max-width:880px){
+  #appView{height:auto;overflow:visible}
+  main{grid-template-columns:1fr}
+  .pane{overflow:visible}
+  .listhead{position:static;margin:0;padding:0 0 8px}
+  .pane.in{border-right:none;border-bottom:1px solid var(--line)}
+}
 /* ログイン */
 .authbox{max-width:360px;margin:80px auto;background:var(--sheet);border:1px solid var(--line);border-radius:10px;padding:26px}
 .authbox h1{font-size:18px;margin:0 0 4px}
@@ -166,6 +177,7 @@ th{font-size:11px;color:var(--sub);letter-spacing:.08em;border-top:none}
 
 <main id="tList">
   <section class="pane in">
+    <div class="listhead">
     <div class="filters">
       <input type="text" id="fQ" placeholder="クリニック名で検索">
       <select id="fDept"><option value="">診療科</option></select>
@@ -185,9 +197,7 @@ th{font-size:11px;color:var(--sub);letter-spacing:.08em;border-top:none}
         <option value="1">★のみ</option>
       </select>
     </div>
-    <div class="lcount" id="lCount"></div>
-    <div id="clist"></div>
-    <div class="btns" style="margin-top:4px">
+    <div class="btns" style="margin-top:6px">
       <label style="display:inline;margin:0;font-size:12px;font-weight:400;letter-spacing:0"><input type="checkbox" id="cbAll" style="vertical-align:-2px"> 表示中を全選択</label>
       <span class="status" id="selCount" style="margin:0"></span>
     </div>
@@ -195,13 +205,14 @@ th{font-size:11px;color:var(--sub);letter-spacing:.08em;border-top:none}
       <button class="primary mini" id="aiBatch">選択をAI生成</button>
       <button class="mini" id="resBatch">選択を導線調査</button>
       <button class="mini" id="hpBatch">選択をHP補完</button>
-    </div>
-    <div class="status" id="batchStat" style="margin:4px 0 0"></div>
-    <div class="btns">
       <button class="mini" id="csvIn">CSV取込</button>
       <button class="mini" id="csvOut">CSV書き出し</button>
       <input type="file" id="csvFile" accept=".csv" hidden>
     </div>
+    <div class="status" id="batchStat" style="margin:4px 0 0"></div>
+    <div class="lcount" id="lCount"></div>
+    </div>
+    <div id="clist"></div>
   </section>
 
   <section class="pane" id="detail">
