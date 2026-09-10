@@ -61,6 +61,12 @@ main{display:grid;grid-template-columns:minmax(300px,380px) 1fr;min-height:calc(
 .filters input[type=text]{flex:1;min-width:120px;padding:5px 8px;font-size:12px}
 .crow{display:grid;grid-template-columns:1fr auto;gap:4px 8px;padding:8px 10px;border:1px solid var(--line);
   border-radius:6px;margin-bottom:6px;cursor:pointer;background:var(--sheet);font-size:12.5px}
+.crow.sent{border-left:4px solid var(--warn)}
+.crow.replied{border-left:4px solid var(--ok)}
+.crow.dead{opacity:.55}
+.crow.ready{border-left:4px solid var(--accent)}
+.miss{color:var(--bad);font-weight:700}
+.full{color:var(--ok);font-weight:700}
 .crow:hover{border-color:var(--accent)}
 .crow.sel{border-color:var(--accent);background:var(--accent-weak)}
 .crow .nm{font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -166,7 +172,17 @@ th{font-size:11px;color:var(--sub);letter-spacing:.08em;border-top:none}
       <select id="fCh"><option value="">送信手段</option></select>
       <select id="fSt"><option value="">状況</option>
         <option>未送信</option><option>送信済</option><option>返信あり</option><option>アポ</option><option>辞退</option><option>NG</option></select>
-      <select id="fPr"><option value="">すべて</option><option value="1">★のみ</option><option value="sendable">送れる先のみ</option><option value="cand">HP候補（承認待ち）</option></select>
+      <select id="fPr">
+        <option value="">すべて</option>
+        <option value="ready">送信可（文面まで完成）</option>
+        <option value="sendable">送れる先のみ（メール/フォーム）</option>
+        <option value="unres">未調査のみ</option>
+        <option value="res">調査済みのみ</option>
+        <option value="miss">情報に欠けあり</option>
+        <option value="full">情報◎（欠けなし）</option>
+        <option value="cand">HP候補（承認待ち）</option>
+        <option value="1">★のみ</option>
+      </select>
     </div>
     <div class="lcount" id="lCount"></div>
     <div id="clist"></div>
@@ -295,23 +311,65 @@ function filtered(){
     (!st || c.status===st) &&
     (pr!=='1' || c.priority) &&
     (pr!=='sendable' || ['メール','フォーム'].includes(c.send_channel)) &&
-    (pr!=='cand' || (!c.hp_url && c.research && c.research.findhp && c.research.findhp.url && !c.research.findhp.rejected))
+    (pr!=='ready' || rowState(c).ready) &&
+    (pr!=='unres' || !rowState(c).researched) &&
+    (pr!=='res' || rowState(c).researched) &&
+    (pr!=='miss' || rowState(c).missing.length>0) &&
+    (pr!=='full' || rowState(c).missing.length===0) &&
+    (pr!=='cand' || rowState(c).cand)
   );
+}
+/* 1件の状態を判定（表示・フィルタ・集計で共通利用）
+   researched=導線調査を実行済み／missing=送信に必要な情報の欠け／ready=あとは送るだけ */
+function rowState(c){
+  const researched = !!(c.research && c.research.checked_at);
+  const cand = !c.hp_url && c.research && c.research.findhp && c.research.findhp.url && !c.research.findhp.rejected;
+  const hasDest = !!(c.email || c.form_url);
+  const missing = [];
+  if(!c.hp_url) missing.push('HP');
+  if(!hasDest && !['未対応','取得失敗'].includes(c.send_channel)) missing.push('宛先');
+  if(!c.phone) missing.push('TEL');
+  if(!c.director_name) missing.push('院長名');
+  const dead = ['未対応','取得失敗'].includes(c.send_channel) || ['NG','辞退'].includes(c.status);
+  const sent = c.status==='送信済';
+  const replied = ['返信あり','アポ'].includes(c.status);
+  const ready = !sent && !replied && !dead && c.hp_url && hasDest && !!c.gen;
+  const cls = replied ? 'replied' : (sent ? 'sent' : (dead ? 'dead' : (ready ? 'ready' : '')));
+  return { researched, cand, hasDest, missing, dead, sent, replied, ready, cls };
 }
 function renderList(){
   const list = filtered();
-  $('lCount').textContent = `${list.length} 件（全 ${clinics.length} 件）`;
-  $('clist').innerHTML = list.map(c=>`
-    <div class="crow${sel && sel.id===c.id?' sel':''}" data-id="${c.id}">
+  const n = f => list.filter(f).length;
+  $('lCount').innerHTML = `${list.length} 件（全 ${clinics.length} 件）`
+    + `　<span style="color:var(--accent-ink)">送信可 ${n(c=>rowState(c).ready)}</span>`
+    + `　調査済 ${n(c=>rowState(c).researched)}`
+    + `　情報◎ ${n(c=>rowState(c).missing.length===0)}`
+    + `　送信済 ${n(c=>c.status==='送信済')}`;
+  $('clist').innerHTML = list.map(c=>{
+    const s = rowState(c);
+    // 1段目バッジ：HP → 導線調査 → 文面
+    const stage =
+      (c.hp_url?'<span class="pill">HP✓</span>':(s.cand?'<span class="pill warn">HP候補</span>':'<span class="pill dim">HPなし</span>')) +
+      (s.researched
+        ? (['未対応','取得失敗'].includes(c.send_channel)
+            ? `<span class="pill bad">調査済 ${esc(c.send_channel)}</span>`
+            : `<span class="pill">調査済 ${esc(c.send_channel||'')}${c.captcha?'･CAPTCHA':''}</span>`)
+        : (c.send_channel ? `<span class="pill warn">未調査（CSV:${esc(c.send_channel)}）</span>` : '<span class="pill dim">未調査</span>')) +
+      (c.gen?'<span class="pill">文面✓</span>':'<span class="pill dim">文面 未</span>');
+    // 2段目：情報の欠け（HP/宛先/TEL/院長名）
+    const info = s.missing.length
+      ? `<span class="miss">欠: ${s.missing.join('・')}</span>`
+      : '<span class="full">情報◎</span>';
+    const meta = [c.department ? esc(c.department) : null, c.director_name ? '院長 '+esc(c.director_name) : null].filter(Boolean).join('　');
+    const cls = ['crow', sel && sel.id===c.id?'sel':'', s.cls].filter(Boolean).join(' ');
+    return `
+    <div class="${cls}" data-id="${c.id}">
       <span class="nm"><input type="checkbox" class="cb" data-id="${c.id}" ${selIds.has(c.id)?'checked':''} style="vertical-align:-2px;margin-right:6px">${c.priority?'★ ':''}${esc(c.name)}</span>
-      <span>${(!c.hp_url && c.research && c.research.findhp && c.research.findhp.url && !c.research.findhp.rejected)?'<span class="pill warn">HP候補</span> ':''}${c.gen?'<span class="pill">文面✓</span> ':''}<span class="pill ${c.status==='未送信'?'dim':(c.status==='NG'||c.status==='辞退'?'bad':(c.status==='送信済'?'warn':''))}">${esc(c.status||'')}</span></span>
-      <span class="meta">
-        <span>${esc(c.department||'—')}</span>
-        <span>${esc(c.send_channel||'—')}${c.captcha?'（CAPTCHA）':''}</span>
-        ${c.director_name?`<span>院長: ${esc(c.director_name)}</span>`:''}
-        ${c.ig_name && c.ig_name!==c.name?`<span>IG: ${esc(c.ig_name)}</span>`:''}
-      </span>
-    </div>`).join('') || '<div class="status">該当なし</div>';
+      <span class="pill ${c.status==='未送信'?'dim':(c.status==='NG'||c.status==='辞退'?'bad':(c.status==='送信済'?'warn':''))}">${esc(c.status||'')}</span>
+      <span class="meta" style="gap:4px">${stage}</span>
+      <span class="meta" style="gap:8px">${info}${meta?`<span>${meta}</span>`:''}</span>
+    </div>`;
+  }).join('') || '<div class="status">該当なし</div>';
 }
 ['fQ','fDept','fCh','fSt','fPr'].forEach(id=>{ $(id).addEventListener('input', renderList); });
 const selIds = new Set();
@@ -489,9 +547,18 @@ function renderDetail(){
       <button id="dReply">返信あり</button>
       <button id="dApo">アポ獲得</button>
     </div>
+    <h2 class="sec">基本情報${(()=>{const m=rowState(c).missing;return m.length?`<span class="miss" style="margin-left:8px;font-size:11px">欠: ${m.join('・')}</span>`:'<span class="full" style="margin-left:8px;font-size:11px">欠けなし</span>';})()}</h2>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+      <div><label style="margin-top:0">HP URL</label><input type="text" id="dHp" value="${esc(c.hp_url||'')}"></div>
+      <div><label style="margin-top:0">電話番号</label><input type="text" id="dPhone" value="${esc(c.phone||'')}" placeholder="HP特定の照合に使われます"></div>
+      <div><label style="margin-top:0">メールアドレス</label><input type="text" id="dEmail" value="${esc(c.email||'')}"></div>
+      <div><label style="margin-top:0">フォームURL</label><input type="text" id="dForm" value="${esc(c.form_url||'')}"></div>
+      <div><label style="margin-top:0">住所</label><input type="text" id="dAddr" value="${esc(c.address||'')}"></div>
+      <div><label style="margin-top:0">Instagram URL</label><input type="text" id="dIg" value="${esc(c.ig_url||'')}"></div>
+    </div>
     <label>メモ</label>
     <textarea id="dNotes" rows="2">${esc(c.notes||'')}</textarea>
-    <div class="btns"><button class="mini" id="dNotesSave">メモ保存</button></div>
+    <div class="btns"><button class="mini" id="dNotesSave">基本情報とメモを保存</button></div>
     <div class="foot">送信前チェック：引用が原文と一致しているか／Why nowが不自然でないか（無理なら空欄）／経営の目・感嘆語が混ざっていないか／1日20〜30件・10-12時/13-15時。</div>
   `;
   bindDetail();
@@ -534,7 +601,15 @@ function bindDetail(){
   $('dSent').onclick = markSent;
   $('dReply').onclick = ()=>markResult('返信あり','返信');
   $('dApo').onclick = ()=>markResult('アポ','アポ');
-  $('dNotesSave').onclick = async ()=>{ await updClinic({notes:$('dNotes').value}); toast('メモを保存しました'); };
+  $('dNotesSave').onclick = async ()=>{
+    await updClinic({
+      notes: $('dNotes').value,
+      hp_url: $('dHp').value.trim(), phone: $('dPhone').value.trim(),
+      email: $('dEmail').value.trim(), form_url: $('dForm').value.trim(),
+      address: $('dAddr').value.trim(), ig_url: $('dIg').value.trim(),
+    });
+    toast('保存しました'); renderDetail();
+  };
 }
 async function copy(t){ try{ await navigator.clipboard.writeText(t); }catch(e){ const ta=document.createElement('textarea'); ta.value=t; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); ta.remove(); } }
 async function updClinic(patch){
