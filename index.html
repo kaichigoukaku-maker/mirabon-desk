@@ -309,12 +309,12 @@ const fmtDate = s => { try{ const d=new Date(s); return `${d.getMonth()+1}/${d.g
 
 /* ============ 工程の定義（すべての画面・件数・検索がこれを使う） ============ */
 const PAGES = {
-  prep:  { label:'① リスト整備', stages:['find','confirm','research','excluded'], tabs:['find','confirm','research','excluded','all'] },
+  prep:  { label:'① リスト整備', stages:['find','confirm','research','excluded'], tabs:['find','confirm','research','excluded','dup','all'] },
   write: { label:'② 文面・検証', stages:['write','verify','fix'],               tabs:['write','verify','fix'] },
   send:  { label:'③ 送信',       stages:['send','waiting','result'],            tabs:['send','waiting','result'] },
 };
 const STAGE_LABEL = {
-  find:'HPを探す', confirm:'HPを確認', research:'送り先を調べる', excluded:'対象外', all:'すべて',
+  find:'HPを探す', confirm:'HPを確認', research:'送り先を調べる', excluded:'対象外', dup:'重複の疑い', all:'すべて',
   write:'文面を作る', verify:'検証する', fix:'直す',
   send:'送る', waiting:'返事待ち', result:'返信・結果',
 };
@@ -323,9 +323,10 @@ const NOTE = {
   confirm:'自動検索で候補は出たが確証がない院。リンクを開いて確かめ、採用／却下してください。',
   research:'HPから問い合わせフォーム・メールを探します。見つからない院は「編集」で手入力できます。',
   excluded:'窓口がない・送らないと決めた院。IG DM／テレアポに回してください。',
+  dup:'同じHPで電話番号も同じ（または空欄）の院です。同じ院に2回送らないよう、残す1行を選んでください。残さない行は「送らない」になります（あとで戻せます）。',
   all:'すべての院。「編集」からHP・電話・送り先・メモを直せます。',
-  write:'AIがHPを読んで個別化パートを作ります（1件約2分・同時2件）。',
-  verify:'生成とは別のモデルで、事実の裏付け・宛名・診療科・トーンを検証します。OKなら ③送信 に移ります。',
+  write:'材料集め（人 → 特徴・動き）→ 執筆 の順に進みます（1件約2〜3分）。工程ごとに保存するので、失敗しても押し直せば失敗した工程から再開します。',
+  verify:'生成とは別のモデルで「事実の裏付け」と「宛名・診療科・表現」を同時に検証します。OKなら ③送信 に移ります。',
   fix:'検証で指摘が出た院。右で直して「修正を保存」→ もう一度ファクトチェック。',
   waiting:'送信済みで返事を待っている院。返事が来たら結果を記録してください。',
   result:'返信・アポ・お断りの記録。',
@@ -396,9 +397,11 @@ $('aSetPw').onclick = async ()=>{
 $('logout').onclick = async ()=>{ await sb.auth.signOut(); location.reload(); };
 
 /* ============ データ ============ */
+// 一覧の読み込みでは重いHP本文（src_text）を取らない。必要な時だけ ensureHeavy() で取りに行く
+const LIST_COLS = 'id,name,ig_name,department,hp_url,phone,address,ig_url,send_channel,email,form_url,captcha,director_name,hp_excerpt,ctm,status,priority,ng,ng_reason,notes,research,gen,factcheck,pipe,created_at,updated_at';
 async function loadAll(){
   const [c, s, l] = await Promise.all([
-    sb.from('clinics').select('*').order('name').limit(3000),
+    sb.from('clinics').select(LIST_COLS).order('name').limit(3000),
     sb.from('app_settings').select('*').eq('key','constants').single(),
     sb.from('send_log').select('*').order('sent_at',{ascending:false}).limit(5000),
   ]);
@@ -408,7 +411,15 @@ async function loadAll(){
   sendLogs = l.data || [];
   renderAll();
 }
+/* DB（PostgreSQLのjsonb）は NUL文字（\u0000）を保存できない。HP由来の文字列に紛れることがあるので保存前に必ず除去する */
+function clean(v){
+  if(typeof v === 'string') return v.replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/g, '');
+  if(Array.isArray(v)) return v.map(clean);
+  if(v && typeof v === 'object'){ const o = {}; for(const k in v) o[k] = clean(v[k]); return o; }
+  return v;
+}
 async function upd(c, patch){
+  patch = clean(patch);
   const { error } = await sb.from('clinics').update(patch).eq('id', c.id);
   if(error){ toast('保存失敗: '+error.message); return false; }
   Object.assign(c, patch); return true;
@@ -416,10 +427,47 @@ async function upd(c, patch){
 function lastLogMap(){ const m = {}; sendLogs.forEach(l=>{ if(!m[l.clinic_id]) m[l.clinic_id] = l; }); return m; }
 function deptTokens(d){ return String(d||'').split(/[,、，\/・]/).map(s=>s.trim()).filter(Boolean); }
 function baseList(){ return clinics.filter(c=>(!filt.dept || deptTokens(c.department).includes(filt.dept)) && (!filt.star || c.priority)); }
-function stageList(st){ return st==='all' ? baseList() : baseList().filter(c=>stageOf(c)===st); }
+function stageList(st){
+  if(st==='all') return baseList();
+  if(st==='dup') return dupGroups().flat();
+  return baseList().filter(c=>stageOf(c)===st);
+}
 function curList(){ return stageList(sub[page]); }
 function selectedIn(){ return curList().filter(c=>selIds.has(c.id)); }
-function getGen(c){ return genCache[c.id] || (c.gen && c.gen.result ? { result:c.gen.result, src:c.gen.src||'' } : null); }
+function getGen(c){
+  if(genCache[c.id]) return genCache[c.id];
+  return c.gen && c.gen.result ? { result:c.gen.result, src: c.src_text || c.gen.src || '' } : null;
+}
+
+/* ============ 重複の判定 ============
+   同じHP（ドメイン＋ページ）で、電話番号が同じ（またはどちらかが空）なら同じ院の重複。
+   電話番号が違えば、同じグループの別院（チェーン等）なので重複にはしない。 */
+function normUrl(u){ try{ const x = new URL(u); return (x.hostname.replace(/^www\./,'') + x.pathname.replace(/\/+$/,'')).toLowerCase(); }catch(e){ return ''; } }
+const digits = p => String(p||'').replace(/\D/g,'');
+function dupGroups(){
+  const by = {};
+  clinics.forEach(c=>{ if(c.status==='NG') return; const k = normUrl(c.hp_url); if(k) (by[k] = by[k] || []).push(c); });
+  const groups = [];
+  Object.values(by).forEach(arr=>{
+    if(arr.length < 2) return;
+    const phones = [...new Set(arr.map(c=>digits(c.phone)).filter(Boolean))];
+    if(phones.length <= 1){ groups.push(arr); return; }
+    phones.forEach(p=>{ const g = arr.filter(c=>digits(c.phone)===p); if(g.length > 1) groups.push(g); });
+  });
+  return groups;
+}
+function dupOf(c, url, phone){
+  // url を採用すると重複になる相手（自分以外で、同じHPかつ電話が同じ／どちらか空）
+  const k = normUrl(url); if(!k) return null;
+  const p = digits(phone !== undefined ? phone : c.phone);
+  return clinics.find(o=>o.id!==c.id && o.status!=='NG' && normUrl(o.hp_url)===k && (!p || !digits(o.phone) || digits(o.phone)===p)) || null;
+}
+function chainPeers(c){
+  // 同じドメインを、電話番号の違う別の院も使っている＝チェーンのトップページが割り当てられている疑い
+  const h = host(c.hp_url||''); const p = digits(c.phone);
+  if(!h || !p) return [];
+  return clinics.filter(o=>o.id!==c.id && o.status!=='NG' && host(o.hp_url||'')===h && digits(o.phone) && digits(o.phone)!==p);
+}
 
 /* ============ 画面切り替え ============ */
 const MAINS = { prep:'pPrep', write:'pWrite', send:'pSend', stats:'tStats', settings:'tSettings' };
@@ -436,7 +484,7 @@ $('tabs').onclick = e=>{
 };
 function renderTabs(){
   const n = st => clinics.filter(c=>stageOf(c)===st).length;
-  $('cnt_prep').textContent  = (n('find')+n('confirm')+n('research')) || '';
+  $('cnt_prep').textContent  = (n('find')+n('confirm')+n('research')+dupGroups().flat().length) || '';
   $('cnt_write').textContent = (n('write')+n('verify')+n('fix')) || '';
   $('cnt_send').textContent  = n('send') || '';
   [...$('tabs').children].forEach(b=>b.classList.toggle('on', b.dataset.t===page));
@@ -467,6 +515,7 @@ function toolbar(p, btnsHTML, note){
       <label class="inl"><input type="checkbox" class="cball" style="vertical-align:-2px"> 表示中を全選択</label>
       <span class="status selcount" style="margin:0">${nSel?`${nSel} 件選択中 / ${vis.length} 件`:`${vis.length} 件`}</span>
       ${btnsHTML}
+      ${btnsHTML ? `<select class="conc" title="一括処理で同時に進める件数" style="width:auto;padding:4px 8px;font-size:12px">${[1,2,3].map(n=>`<option value="${n}"${CONC===n?' selected':''}>同時 ${n}件</option>`).join('')}</select>` : ''}
     </div>`}
     ${note ? `<div class="note">${note}</div>` : ''}
     <div class="status bstat" id="bs_${p}" style="margin:4px 0 0">${esc(bmsg[p])}</div>`;
@@ -480,6 +529,7 @@ function bindToolbar(p){
   });
   const fd = root.querySelector('.fdept'); if(fd) fd.onchange = ()=>{ filt.dept = fd.value; selIds.clear(); renderAll(); };
   const fs = root.querySelector('.fstar'); if(fs) fs.onchange = ()=>{ filt.star = fs.checked; selIds.clear(); renderAll(); };
+  const cc = root.querySelector('.conc'); if(cc) cc.onchange = ()=>{ CONC = +cc.value; try{ localStorage.setItem('mirabon_conc', String(CONC)); }catch(e){} toast(`一括処理を同時${CONC}件で進めます`); };
   const ca = root.querySelector('.cball');
   if(ca){
     ca.onchange = ()=>{ curList().forEach(c=> ca.checked ? selIds.add(c.id) : selIds.delete(c.id)); updSelUI(p); };
@@ -505,10 +555,22 @@ function renderPrep(){
   const snap = snapshotPrep();
   $('tb_prep').innerHTML = toolbar('prep', btns, NOTE[st]);
   bindToolbar('prep');
+  const head = `<tr><th style="width:28px"></th><th>院名</th><th>HP</th><th>電話</th><th>送り先</th><th style="width:1%"></th></tr>`;
+  if(st==='dup'){
+    // 重複はグループごとに表示し、残す1行を選んでもらう
+    const groups = dupGroups();
+    $('prepBody').innerHTML = groups.length ? groups.map(g=>`
+      <div style="margin-bottom:14px">
+        <div class="sm" style="margin-bottom:4px"><b>同じHP：${esc(normUrl(g[0].hp_url))}</b>（${g.length}行・電話 ${esc(g.map(x=>x.phone||'空欄').join(' / '))}）</div>
+        <div style="overflow-x:auto"><table class="ptable">${head}
+          ${g.map(c=>prepRow(c).replace('<td style="white-space:nowrap"><button class="mini" data-act="edit"',
+            `<td style="white-space:nowrap"><button class="primary mini" data-act="keepdup" data-id="${c.id}" data-group="${esc(g.map(x=>x.id).join(','))}">この行を残す</button><br><button class="mini" data-act="edit"`)).join('')}
+        </table></div>
+      </div>`).join('') : `<div class="status">重複の疑いはありません。</div>`;
+    restorePrep(snap); return;
+  }
   $('prepBody').innerHTML = list.length
-    ? `<div style="overflow-x:auto"><table class="ptable">
-        <tr><th style="width:28px"></th><th>院名</th><th>HP</th><th>電話</th><th>送り先</th><th style="width:1%"></th></tr>
-        ${list.map(prepRow).join('')}</table></div>`
+    ? `<div style="overflow-x:auto"><table class="ptable">${head}${list.map(prepRow).join('')}</table></div>`
     : `<div class="status">この工程の院はありません。</div>`;
   restorePrep(snap);
 }
@@ -516,7 +578,10 @@ function prepRow(c){
   const st = stageOf(c), f = c.research && c.research.findhp;
   let hp;
   if(c.hp_url){
-    hp = `<a href="${esc(c.hp_url)}" target="_blank" rel="noopener">${esc(host(c.hp_url))}</a>`;
+    hp = `<a href="${esc(c.hp_url)}" target="_blank" rel="noopener">${esc(host(c.hp_url))}${(()=>{ try{ const p = new URL(c.hp_url).pathname; return p && p!=='/' ? esc(p) : ''; }catch(e){ return ''; } })()}</a>`;
+    const peers = chainPeers(c);
+    if(peers.length) hp += `<div class="sm" style="color:var(--warn)">⚠ 同じHPを電話番号の違う院（${esc(peers.map(o=>o.name).slice(0,2).join('・'))}）も使っています。チェーンのトップページの可能性。この院のページに差し替えてください</div>`;
+    if(sub.prep!=='dup' && dupGroups().some(g=>g.includes(c))) hp += `<div class="sm" style="color:var(--bad)">⚠ 重複の疑い（「重複の疑い」タブで整理）</div>`;
   }else if(st==='confirm'){
     const ev = Array.isArray(f.evidence) ? f.evidence : [f.evidence].filter(Boolean);
     hp = `<span class="pill ${f.confidence==='高'?'':'warn'}">候補・確度${esc(f.confidence||'低')}</span>
@@ -604,7 +669,16 @@ $('prepBody').addEventListener('click', async e=>{
     case 'hpsave': {
       const u = b.parentElement.querySelector('.hppaste').value.trim();
       if(!/^https?:\/\//.test(u)){ toast('https:// から始まるURLを貼ってください'); return; }
-      if(await upd(c, { hp_url:u, gen:null, factcheck:null })){ delete genCache[c.id]; toast('保存しました →「送り先を調べる」へ'); renderAll(); }
+      const d = dupOf(c, u);
+      if(d && !confirm(`同じHPの院「${d.name}」がすでにあります（重複の可能性）。このまま保存しますか？`)) return;
+      if(await upd(c, { hp_url:u, gen:null, factcheck:null, src_text:null, pipe:null })){ delete genCache[c.id]; c._heavy = true; toast('保存しました →「送り先を調べる」へ'); renderAll(); }
+      break;
+    }
+    case 'keepdup': {
+      const others = b.dataset.group.split(',').filter(id=>id!==c.id).map(id=>clinics.find(x=>x.id===id)).filter(Boolean);
+      if(!confirm(`「${c.name}」を残し、ほかの${others.length}行を「送らない（重複）」にします。よろしいですか？`)) return;
+      for(const o of others) await upd(o, { status:'NG', ng_reason:'重複', notes: ((o.notes||'') + `\n重複のため送らない（残した行：${c.name}）`).trim() });
+      toast(`${others.length}行を重複として「送らない」にしました（対象外タブから戻せます）`); renderAll();
       break;
     }
     case 'res1': {
@@ -627,7 +701,11 @@ async function saveEdit(c, tr){
   if(get('priority') !== !!c.priority) patch.priority = get('priority');
   if(get('ng') && c.status!=='NG') patch.status = 'NG';
   if(!get('ng') && c.status==='NG') patch.status = '未送信';
-  if('hp_url' in patch){ patch.gen = null; patch.factcheck = null; delete genCache[c.id]; }
+  if('hp_url' in patch){
+    const d = patch.hp_url ? dupOf(c, patch.hp_url, 'phone' in patch ? patch.phone : c.phone) : null;
+    if(d && !confirm(`同じHPの院「${d.name}」がすでにあります（重複の可能性）。このまま保存しますか？`)) return;
+    patch.gen = null; patch.factcheck = null; patch.src_text = null; patch.pipe = null; delete genCache[c.id]; c._heavy = true;
+  }
   if(!Object.keys(patch).length){ editId = null; renderAll(); return; }
   if(!(await upd(c, patch))) return;
   editId = null;
@@ -638,7 +716,10 @@ async function saveEdit(c, tr){
 async function approveHp(c){
   const r = (c.research||{}).findhp || {};
   if(!r.url){ toast('候補URLがありません'); return; }
-  const patch = { hp_url: r.url, research: Object.assign({}, c.research, { findhp: Object.assign({}, r, { approved:true }) }) };
+  const d = dupOf(c, r.url);
+  if(d && !confirm(`同じHPの院「${d.name}」がすでにあります（重複の可能性）。それでも採用しますか？`)) return;
+  const patch = { hp_url: r.url, src_text:null, pipe:null, gen:null, factcheck:null, research: Object.assign({}, c.research, { findhp: Object.assign({}, r, { approved:true }) }) };
+  c._heavy = true; delete genCache[c.id];
   const official = (r.official_name||'').trim();
   if(official && official!==c.name && official.length<=40){ patch.ig_name = c.ig_name || c.name; patch.name = official; }
   if(await upd(c, patch)){ toast('採用しました' + (patch.name ? '（名前を正式名称に更新）' : '')); renderAll(); }
@@ -662,10 +743,15 @@ function renderWrite(keepDetail){
     const badge = st==='fix' ? `<span class="pill bad">要確認${fc&&fc.counts&&fc.counts.ng ? ' '+fc.counts.ng : ''}</span>`
                : (st==='verify' ? '<span class="pill warn">未検証</span>' : '<span class="pill dim">文面 未</span>');
     const meta = [c.department ? esc(c.department) : '', '宛：'+(c.director_name ? esc(c.director_name)+' 先生' : '院長先生'), c.email ? 'メール' : (c.form_url ? 'フォーム' : '')].filter(Boolean).join('　');
+    const steps = st==='write' ? ['src','people','features','signals','write'] : (st==='verify' ? ['fc_claims','fc_meta'] : []);
+    const errs = stepErrors(c);
+    const started = steps.some(k=>stepState(c,k)!=='none');
     return `<div class="crow${sel && sel.id===c.id ? ' sel' : ''}" data-id="${c.id}">
       <span class="nm"><input type="checkbox" class="cb" data-id="${c.id}" ${selIds.has(c.id)?'checked':''} style="vertical-align:-2px;margin-right:6px">${c.priority?'★ ':''}${esc(c.name)}</span>
       ${badge}
       <span class="meta">${meta}</span>
+      ${started ? `<span class="meta">${stepChips(c, steps)}</span>` : ''}
+      ${errs.length ? `<span class="meta" style="color:var(--bad)">失敗：${esc(errs[0])}（押し直すとここから再開）</span>` : ''}
       ${st==='fix' && fc && fc.summary ? `<span class="meta" style="color:var(--bad)">${esc(fc.summary)}</span>` : ''}
     </div>`;
   }).join('') || '<div class="status">この工程の院はありません。</div>';
@@ -707,11 +793,14 @@ function renderDetail(){
       ${c.hp_url ? `<a href="${esc(c.hp_url)}" target="_blank" rel="noopener"><button class="mini">HPを開く</button></a>` : ''}
       <button class="mini" id="dToPrep">HP・送り先を直す（①へ）</button>
       ${st==='send' ? `<button class="mini" id="dToSend">③送信で開く</button>` : ''}
+      <button class="mini" id="dReset" title="HP本文・材料・文面・検証をすべて消して、HPの取得からやり直します">HPから取り直す</button>
     </div>
+    <div class="sm" style="margin-top:8px">工程：${stepChips(c, ['src','people','features','signals','write','fc_claims','fc_meta'])}</div>
+    ${stepErrors(c).map(m=>`<div class="alert bad" style="margin-top:6px">失敗：${esc(m)}　→「${r ? 'ファクトチェック' : 'AIで作成'}」を押すと、失敗した工程から再開します</div>`).join('')}
     ${factPanel(c)}
     <h2 class="sec">個別化パート</h2>
     <label>宛名（院長名。空欄なら「院長先生」）</label>
-    <input type="text" id="dDirector" value="${esc(c.director_name || (r&&r.director) || '')}">
+    <input type="text" id="dDirector" value="${esc(c.director_name || (r && typeof r.director==='string' ? r.director : '') || '')}">
     <label>Why you（あなただから）</label>
     <textarea id="dYou" rows="3">${esc(r&&r.why_you&&r.why_you.text||'')}</textarea>
     <label>Why now（いまだから・任意）</label>
@@ -720,7 +809,7 @@ function renderDetail(){
     <textarea id="dKa" rows="2">${esc(r&&r.kasetsu&&r.kasetsu.text||'')}</textarea>
     <div style="margin-top:8px"><label class="inl"><input type="checkbox" id="dConcise" ${r&&r.concise?'checked':''}> 簡潔版（冒頭に断りを入れる）</label></div>
     <div class="btns">
-      <button class="primary" id="dGen"${c.hp_url?'':' disabled'}>${r ? 'AIで作り直す' : 'AIで作成'}</button>
+      <button class="primary" id="dGen"${c.hp_url?'':' disabled'}>${r ? 'AIで作り直す（材料はそのまま）' : (['src','people','features','signals'].some(k=>stepState(c,k)==='ok') ? 'AIで作成（続きから）' : 'AIで作成')}</button>
       <button id="dSave"${r?'':' disabled'}>修正を保存（→ 再検証）</button>
       <button id="dFact"${r?'':' disabled'}>ファクトチェック</button>
       <span class="status" id="dStat" style="margin:0"></span>
@@ -748,7 +837,15 @@ function renderDetail(){
   $('dGen').onclick = ()=>aiGenerate(c);
   $('dSave').onclick = async ()=>{ if(await saveEdits(c)) renderAll(); };
   $('dFact').onclick = ()=>runFactOne(c);
-  if(r) renderKenpin(r, g.src);
+  $('dReset').onclick = async ()=>{
+    if(!confirm('HP本文・集めた材料・文面・検証結果をすべて消して、HPの取得からやり直します。よろしいですか？')) return;
+    await resetAll(c); renderAll(); toast('消しました。「AIで作成」を押すとHPの取得から始めます');
+  };
+  // 引用の照合にはHP本文が要る。一覧では読み込んでいないので、ここで取りに行ってから検品欄を出す
+  if(r){
+    if(c._heavy || c.gen.src) renderKenpin(r, getGen(c).src);
+    else ensureHeavy(c).then(()=>{ if(sel===c && $('kenpin')) renderKenpin(r, getGen(c).src); }).catch(()=>{});
+  }
 }
 /* ① 材料集めで抜き出した事実（宛名の判断や、文面の根拠を確かめるため） */
 function factsPanel(c){
@@ -809,37 +906,45 @@ async function saveEdits(c, opts){
   if(!textChanged && !dirChanged){ if(!opts.silent) toast('変更はありません'); return false; }
   const result = Object.assign({}, base, { why_you:f.why_you, why_now:f.why_now, kasetsu:f.kasetsu, concise:f.concise });
   if(textChanged){ result.quotes = extractQuotes(f.why_you.text, f.why_now.text, f.kasetsu.text); result.edited = true; }
-  const gen = Object.assign({}, c.gen||{}, { result, src:g.src, edited_at:new Date().toISOString() });
+  const gen = Object.assign({}, c.gen||{}, { result, edited_at:nowIso() });
+  delete gen.src;
   // 文面か宛名が変わったら、前の検証は無効（別の文面に対する検証を引きずらない）
   if(!(await upd(c, { gen, director_name:f.director, factcheck:null }))) return false;
+  await resetFact(c);
   genCache[c.id] = { result, src:g.src };
   if(!opts.silent) toast('保存しました →「検証する」へ');
   return true;
 }
 async function aiGenerate(c){
-  if(getGen(c) && !confirm('作り直すと、手直しした内容は消えます。よろしいですか？')) return;
-  $('dGen').disabled = true; $('dStat').textContent = 'HPを取得中…';
+  if(getGen(c)){
+    if(!confirm('文面を作り直します（集めた材料はそのまま使います）。手直しした内容は消えます。よろしいですか？')) return;
+    await resetWrite(c);
+  }
+  $('dGen').disabled = true; $('dStat').textContent = '準備中…';
+  const say = m=>{ if(sel && sel.id===c.id && $('dStat')) $('dStat').textContent = m; };
   try{
-    const { r, sc } = await genOne(c, m=>{ if(sel && sel.id===c.id && $('dStat')) $('dStat').textContent = m; });
-    const bad = verifyQuotes(r.quotes, sc.text).filter(x=>!x.ok).length;
-    const retry = r.retried ? '（照合NGを検出→自動で作り直し済み）' : '';
+    const g = await runPipeline(c, say);
+    const r = g.result;
+    const bad = verifyQuotes(r.quotes, g.src).filter(x=>!x.ok).length;
+    const retry = r.retried ? '（引用のずれを検出→自動で書き直し済み）' : '';
     renderAll();
     if(sel && sel.id===c.id) $('dStat').innerHTML = bad ? `<b>生成完了${retry}。照合NGの引用 ${bad}件</b> — 検品欄を確認` : `<b>生成完了${retry}。</b>次は「ファクトチェック」`;
   }catch(e){
-    if($('dStat')) $('dStat').textContent = '失敗：' + e.message;
-    if($('dGen')) $('dGen').disabled = false;
+    renderAll();
+    if(sel && sel.id===c.id && $('dStat')) $('dStat').textContent = '失敗：' + e.message + '（もう一度押すと、失敗した工程から再開します）';
   }
 }
 async function runFactOne(c){
   if(isDirty()) await saveEdits(c, { silent:true });
-  $('dFact').disabled = true; $('dStat').textContent = '別モデルで検証中…（1〜2分）';
+  if(c.factcheck) await resetFact(c);   // 検証済みを押し直した＝最初から検証し直す
+  $('dFact').disabled = true; $('dStat').textContent = '別モデルで検証中…（裏付け・宛名と表現を同時に）';
   try{
-    const fc = await factOne(c);
+    const fc = await runFact(c);
     renderAll();
     toast(fc.verdict==='OK' ? '検証OK → ③送信 に移りました' : '要確認の指摘が出ました');
   }catch(e){
-    if($('dStat')) $('dStat').textContent = '失敗：' + e.message;
-    if($('dFact')) $('dFact').disabled = false;
+    renderAll();
+    if(sel && sel.id===c.id && $('dStat')) $('dStat').textContent = '失敗：' + e.message + '（もう一度押すと、失敗した検証から再開します）';
   }
 }
 function normalize(s){ return (s||'').replace(/[\s　]/g,''); }
@@ -924,6 +1029,7 @@ function renderQueue(list, todayN){
       <div class="dhead"><h2 class="serif">${c.priority?'★ ':''}${esc(c.name)}</h2><span class="sub">${esc(c.department||'')}</span></div>
       <div class="sm" style="margin:6px 0 10px">宛名：<b>${esc(c.director_name ? c.director_name+' 先生' : '院長先生')}</b>　送り先：${c.email ? 'メール '+esc(c.email) : ''}${c.email && c.form_url ? ' ／ ' : ''}${c.form_url ? 'フォーム'+(c.captcha?'（CAPTCHAあり）':'') : ''}
         ${fc ? `<br><span class="pill">検証✓</span> ${esc(fc.summary||'')}` : ''}</div>
+      ${dupGroups().some(g=>g.includes(c)) ? `<div class="alert bad" style="margin-bottom:8px">⚠ この院は重複の疑いがあります（同じHP・電話の行が他にもあります）。二重に送らないよう、① の「重複の疑い」で整理してから送ってください</div>` : ''}
       ${form ? '' : `<div class="sm" style="margin-bottom:6px">件名：${esc(CONST.subject||'')}　<button class="mini" id="qSubj">件名をコピー</button></div>`}
       <div class="letter">${esc(letter)}</div>
       <div class="btns" style="margin-top:14px">
@@ -976,6 +1082,7 @@ $('sendBody').addEventListener('click', async e=>{
   await markResult(c, status, result);
 });
 async function markSent(c, form){
+  await ensureHeavy(c).catch(()=>{});   // 送信記録に残す引用の照合結果のため、HP本文を読み込んでおく
   const g = getGen(c); if(!g){ toast('文面がありません'); return; }
   const r = g.result, body = letterFor(c, form);
   const draftType = (r.why_you && r.why_you.text) ? 'CTM' : '汎用';
@@ -1052,47 +1159,174 @@ async function callFn(name, body){
   if(!res.ok) throw Object.assign(new Error(j.message || j.error || ('HTTP '+res.status)), { status: res.status });
   return j;
 }
-async function genOne(c, onStep){
-  // 2段階：① 材料集め（HPから事実を抜き出し、引用を原文と照合）→ ② 執筆（照合済みの材料だけで書く）。それぞれ別の150秒枠
+/* ============ 工程ごとに保存しながら進める仕組み ============
+   HP取得 → 材料集め（人 → 特徴・動き を同時に）→ 執筆 → ファクトチェック（裏付け・宛名と表現 を同時に）
+   1工程終わるごとにDB（clinics.pipe / src_text）へ保存する。失敗しても、押し直すと失敗した工程から再開する。 */
+const STEP_LABEL = { src:'HP取得', people:'人', features:'特徴', signals:'動き', write:'執筆', fc_claims:'裏付け', fc_meta:'宛名・表現' };
+const nowIso = ()=>new Date().toISOString();
+async function ensureHeavy(c){
+  // HP本文は重いので一覧の読み込みには含めない。必要になった時だけ取りに行く
+  if(c._heavy) return;
+  const { data, error } = await sb.from('clinics').select('src_text').eq('id', c.id).single();
+  if(error) throw new Error('HP本文の読み込みに失敗: '+error.message);
+  c.src_text = data.src_text || ''; c._heavy = true;
+}
+function savePipe(c){
+  // 同じ院の工程を同時に走らせるので、保存は1件ずつ順番に行う（あとの保存が先の結果を上書きしないため）
+  c._chain = (c._chain || Promise.resolve()).catch(()=>{}).then(async ()=>{
+    const { error } = await sb.from('clinics').update({ pipe: clean(c.pipe || {}) }).eq('id', c.id);
+    if(error) throw new Error('工程の保存に失敗: '+error.message);
+  });
+  return c._chain;
+}
+async function stepRun(c, key, fn){
+  try{
+    const out = await fn();
+    if(c.pipe && c.pipe.errors){ delete c.pipe.errors[key]; }
+    return out;
+  }catch(e){
+    c.pipe = c.pipe || {}; c.pipe.errors = c.pipe.errors || {};
+    c.pipe.errors[key] = { message: String(e.message||e).slice(0,200), at: nowIso() };
+    await savePipe(c).catch(()=>{});
+    throw Object.assign(new Error(`${STEP_LABEL[key]}：${e.message||e}`), { step:key, status:e.status });
+  }
+}
+function stripMeta(o){ const x = Object.assign({}, o||{}); ['verify','model','effort','ms','usage','part'].forEach(k=>delete x[k]); return x; }
+function mergeFacts(P){
+  const a = P.people||{}, b = P.features||{}, s = P.signals||{};
+  const f = Object.assign({}, stripMeta(b), stripMeta(s), stripMeta(a));
+  f.cautions = [...(a.cautions||[]), ...(s.cautions||[])];
+  f.verify = { dropped: ['people','features','signals'].reduce((n,k)=>n + (((P[k]||{}).verify||{}).dropped||0), 0) };
+  return f;
+}
+function splitFacts(f){
+  // 旧方式（1回で全部集めた材料）を3分割の形に移す。取り直しの料金をかけないため
+  const pick = ks => Object.fromEntries(ks.filter(k=>k in f).map(k=>[k, f[k]]));
+  return {
+    people:   Object.assign(pick(['clinic','director','doctors']), { cautions:[] }),
+    features: pick(['core','departments','specialty','career','philosophy','qualifications','notable_lines','patient_topics']),
+    signals:  Object.assign(pick(['news','media','concise','do_not_use']), { cautions: f.cautions||[] }),
+  };
+}
+function stepState(c, k){
+  const P = c.pipe || {}, err = P.errors && P.errors[k];
+  let ok;
+  if(k==='src') ok = !!(P.src || c.src_text || (c.gen && c.gen.src));
+  else if(k==='write') ok = !!(c.gen && c.gen.result);
+  else if(['people','features','signals'].includes(k)) ok = !!(P[k] || (c.gen && c.gen.facts));
+  else ok = !!(P[k] || c.factcheck);
+  return ok ? 'ok' : (err ? 'err' : 'none');
+}
+function stepChips(c, keys){
+  return keys.map(k=>{ const s = stepState(c,k); return `<span class="pill ${s==='ok'?'':(s==='err'?'bad':'dim')}">${STEP_LABEL[k]}${s==='ok'?'✓':(s==='err'?'✗':'')}</span>`; }).join(' ');
+}
+function stepErrors(c){ const e = (c.pipe||{}).errors || {}; return Object.keys(e).filter(k=>stepState(c,k)!=='ok').map(k=>`${STEP_LABEL[k]}：${e[k].message}`); }
+
+async function runPipeline(c, onStep){
   const step = m=>{ if(onStep) onStep(m); };
-  step('HPを取得中…');
-  const sc = await callFn('scrape', { url: c.hp_url });
+  await ensureHeavy(c);
+  c.pipe = c.pipe || {};
+  if(!c.pipe.people && !c.pipe.features && !c.pipe.signals && c.gen && c.gen.facts) Object.assign(c.pipe, splitFacts(c.gen.facts));
+  // 1. HP取得
+  if(!c.src_text){
+    step('HPを取得中…');
+    await stepRun(c, 'src', async ()=>{
+      const sc = await callFn('scrape', { url: c.hp_url });
+      if(!(await upd(c, { src_text: sc.text }))) throw new Error('HP本文を保存できませんでした');
+      c.pipe.src = { pages: sc.pages, at: nowIso() };
+      await savePipe(c);
+    });
+  }
   const materials = Object.assign({}, c.ctm || {});
   if(c.hp_excerpt) materials['HP抜粋'] = c.hp_excerpt;
-  step('① 材料集め中…（HPから事実を抜き出して原文と照合）');
-  const facts = await callFn('extract', { source_text: sc.text, clinic_name: c.name, department: c.department || '', materials });
-  step('② 執筆中…（照合済みの材料だけで個別化パートを書く）');
-  const base = { facts, source_text: sc.text, clinic_name: c.name, department: c.department || '' };
-  let r = await callFn('generate', base);
-  if(r.bad_quotes && r.bad_quotes.length){
-    step('② 引用が原文と合わない箇所があったので書き直し中…');
-    const r2 = await callFn('generate', Object.assign({}, base, { fix: r.bad_quotes, previous: r }));
-    r = Object.assign(r2, { retried:true });
+  const base = { source_text: c.src_text, clinic_name: c.name, department: c.department || '', materials };
+  const part = k => stepRun(c, k, async ()=>{ const r = await callFn('extract', Object.assign({}, base, { part:k })); c.pipe[k] = r; await savePipe(c); });
+  // 2. 材料集め：先に「人」（ここでHP本文がKimiに記憶され、続く2回は割引・高速になる）→「特徴」「動き」を同時に
+  if(!c.pipe.people){ step('材料集め：人（院長・医師）…'); await part('people'); }
+  const todo = ['features','signals'].filter(k=>!c.pipe[k]);
+  if(todo.length){
+    step('材料集め：' + todo.map(k=>STEP_LABEL[k]).join('・') + '…');
+    const res = await Promise.allSettled(todo.map(part));
+    const bad = res.find(x=>x.status==='rejected'); if(bad) throw bad.reason;
   }
-  genCache[c.id] = { result: r, src: sc.text };
-  // 作り直したら前の検証は無効。AIが読み取った院長名はその場で保存
-  const patch = { gen:{ result:r, src:sc.text, facts, at:new Date().toISOString() }, factcheck:null };
-  const d = (r.director||'').trim();
-  if(d && !c.director_name) patch.director_name = d;
-  const { error } = await sb.from('clinics').update(patch).eq('id', c.id);
-  if(error) throw new Error(error.message);
-  Object.assign(c, patch);
-  return { r, sc };
+  // 3. 執筆
+  if(!(c.gen && c.gen.result)){
+    step('執筆中…（照合済みの材料だけで書く）');
+    await stepRun(c, 'write', async ()=>{
+      const facts = mergeFacts(c.pipe);
+      const wb = { facts, source_text: c.src_text, clinic_name: c.name, department: c.department || '' };
+      let r = await callFn('generate', wb);
+      if(r.bad_quotes && r.bad_quotes.length){
+        step('引用が原文と合わない箇所を書き直し中…');
+        r = Object.assign(await callFn('generate', Object.assign({}, wb, { fix: r.bad_quotes, previous: r })), { retried:true });
+      }
+      const patch = { gen:{ result:r, facts, at:nowIso() }, factcheck:null };
+      const d = typeof r.director === 'string' ? r.director.trim() : '';
+      if(d && !c.director_name) patch.director_name = d;
+      delete c.pipe.fc_claims; delete c.pipe.fc_meta;
+      if(!(await upd(c, patch))) throw new Error('文面を保存できませんでした');
+      genCache[c.id] = { result:r, src:c.src_text };
+      await savePipe(c);
+    });
+  }
+  return getGen(c);
 }
-async function factOne(c){
-  // 生成(kimi-k3)とは別モデル(kimi-k2.6)で独立検証
+function mergeFact(a, b){
+  const claims = (a && a.claims) || [];
+  const fc = { claims, address: (b && b.address) || { risk:false, note:'' }, department: (b && b.department) || { match:true, note:'' }, tone: (b && b.tone) || [] };
+  const anyIssue = claims.some(x=>x.verdict && x.verdict!=='裏付けあり');
+  const addr = !!fc.address.risk, dept = fc.department.match===false, tone = fc.tone.length>0;
+  fc.verdict = (anyIssue || addr || dept || tone) ? '要確認' : 'OK';
+  fc.counts = { claims:claims.length, ng:claims.filter(x=>x.verdict && x.verdict!=='裏付けあり').length, high:claims.filter(x=>x.severity==='高').length };
+  const probs = [];
+  if(anyIssue && a.summary) probs.push(a.summary);
+  if((addr || dept || tone) && b.summary) probs.push(b.summary);
+  fc.summary = probs.join(' ／ ') || '事実主張はすべて原文に裏付けられ、宛名・診療科・表現にも問題はありません。';
+  fc.model = (a && a.model) || (b && b.model) || '';
+  fc.ms = Math.max((a&&a.ms)||0, (b&&b.ms)||0);
+  fc.checked_at = nowIso();
+  return fc;
+}
+async function runFact(c, onStep){
+  // 生成(kimi-k3)とは別モデル(kimi-k2.6)で独立検証。「裏付け」と「宛名・表現」を同時に走らせ、それぞれ保存
   const g = getGen(c);
   if(!g || !g.result) throw new Error('先にAI生成が必要です');
+  await ensureHeavy(c);
+  c.pipe = c.pipe || {};
   const r = g.result;
-  const fc = await callFn('factcheck', {
-    source_text: g.src, clinic_name: c.name, department: c.department || '',
-    director: c.director_name || r.director || '',
+  const base = {
+    source_text: c.src_text || g.src, clinic_name: c.name, department: c.department || '',
+    director: c.director_name || (typeof r.director==='string' ? r.director : '') || '',
     why_you: (r.why_you&&r.why_you.text)||'', why_now: (r.why_now&&r.why_now.text)||'', kasetsu: (r.kasetsu&&r.kasetsu.text)||'',
-  });
-  const { error } = await sb.from('clinics').update({ factcheck: fc }).eq('id', c.id);
-  if(error) throw new Error(error.message);
-  c.factcheck = fc;
+  };
+  const todo = ['fc_claims','fc_meta'].filter(k=>!c.pipe[k]);
+  if(todo.length){
+    if(onStep) onStep('ファクトチェック中…（' + todo.map(k=>STEP_LABEL[k]).join('・') + '）');
+    const res = await Promise.allSettled(todo.map(k=>stepRun(c, k, async ()=>{
+      const x = await callFn('factcheck', Object.assign({}, base, { part: k==='fc_claims' ? 'claims' : 'meta' }));
+      c.pipe[k] = x; await savePipe(c);
+    })));
+    const bad = res.find(x=>x.status==='rejected'); if(bad) throw bad.reason;
+  }
+  const fc = mergeFact(c.pipe.fc_claims, c.pipe.fc_meta);
+  if(!(await upd(c, { factcheck: fc }))) throw new Error('検証結果を保存できませんでした');
   return fc;
+}
+async function resetFact(c){ c.pipe = c.pipe || {}; delete c.pipe.fc_claims; delete c.pipe.fc_meta; await savePipe(c); }
+async function resetWrite(c){
+  // 作り直し：材料はそのまま使い、執筆と検証だけやり直す
+  c.pipe = c.pipe || {};
+  if(!c.pipe.people && !c.pipe.features && !c.pipe.signals && c.gen && c.gen.facts) Object.assign(c.pipe, splitFacts(c.gen.facts));
+  delete c.pipe.fc_claims; delete c.pipe.fc_meta; if(c.pipe.errors){ delete c.pipe.errors.write; }
+  delete genCache[c.id];
+  await savePipe(c);
+  await upd(c, { gen:null, factcheck:null });
+}
+async function resetAll(c){
+  // HPから取り直し：HP本文・材料・文面・検証をすべて消す
+  delete genCache[c.id];
+  await upd(c, { src_text:null, pipe:null, gen:null, factcheck:null });
+  c._heavy = true; c.src_text = null; c.pipe = null;
 }
 async function researchOne(c){
   const r = await callFn('research', { url: c.hp_url });
@@ -1108,7 +1342,10 @@ async function hpOne(c){
   // 照合が通れば自動でHP URL・正式名称を確定。確証がなければ「HPを確認」へ
   const r = await callFn('findhp', { name: c.ig_name || c.name, address: c.address || '', phone: c.phone || '', ig_url: c.ig_url || '' });
   const ev = Array.isArray(r.evidence) ? r.evidence : [r.evidence].filter(Boolean);
-  const auto = r.url && !ev.some(x=>/⚠/.test(x)) && (r.verified || ev.some(x=>/名前の照合OK/.test(x)));
+  // すでに同じHPの院がある（電話が同じ／どちらか空）なら、自動では確定せず「HPを確認」に回す
+  const d = r.url ? dupOf(c, r.url) : null;
+  if(d){ ev.push(`⚠ 同じHPの院「${d.name}」がすでにあります（重複の可能性）`); r.evidence = ev; }
+  const auto = r.url && !d && !ev.some(x=>/⚠/.test(x)) && (r.verified || ev.some(x=>/名前の照合OK/.test(x)));
   const patch = { research: Object.assign({}, c.research||{}, { findhp: Object.assign({}, r, auto ? { auto_adopted:true } : {}) }) };
   if(auto){
     patch.hp_url = r.url;
@@ -1120,7 +1357,9 @@ async function hpOne(c){
   Object.assign(c, patch);
 }
 
-/* ============ 一括処理（1件ずつ独立・同時2件・混雑時は1回だけ再試行） ============ */
+/* ============ 一括処理（1件ずつ独立。同時に処理する件数は画面で選べる。Kimiの混雑時だけ25秒おいて再試行） ============ */
+let CONC = 2;
+try{ const v = +localStorage.getItem('mirabon_conc'); if([1,2,3].includes(v)) CONC = v; }catch(e){}
 async function runBatch(p, label, items, fn, doneMsg){
   const setMsg = m=>{ bmsg[p] = m; const el = $('bs_'+p); if(el) el.textContent = m; };
   if(!items.length){ setMsg('対象なし（チェックを入れた院の中に処理できるものがありません）'); return; }
@@ -1141,9 +1380,9 @@ async function runBatch(p, label, items, fn, doneMsg){
       tick(); renderAll({ keepDetail:true });
     }
   }
-  await Promise.all([worker(), worker()]);
+  await Promise.all(Array.from({ length: Math.min(CONC, items.length) }, worker));
   busy[p] = false; items.forEach(c=>selIds.delete(c.id));
-  setMsg(`${label}完了 ${done}件／失敗 ${ng}件。${doneMsg||''}` + (errs.length ? `（最初の失敗: ${errs[0]}）` : ''));
+  setMsg(`${label}完了 ${done}件／失敗 ${ng}件。${doneMsg||''}` + (ng ? '　失敗した院は一覧に赤字で理由が出ます。もう一度押すと、失敗した工程から再開します。' : ''));
   if(errs.length) console.warn(label+'の失敗:', errs);
   renderAll({ keepDetail: !(sel && items.includes(sel)) });
 }
@@ -1153,9 +1392,10 @@ async function runBatch(p, label, items, fn, doneMsg){
     const k = b.dataset.batch, S = selectedIn();
     if(k==='hp')    runBatch(p, 'HP補完', S.filter(c=>!c.hp_url), hpOne, '確実なものは自動で確定。確証がない院は「HPを確認」に移りました。');
     if(k==='res')   runBatch(p, '導線調査', S.filter(c=>c.hp_url), researchOne, '送り先が見つかった院は「② 文面・検証」へ移りました。');
-    if(k==='gen')   runBatch(p, 'AI生成', S.filter(c=>c.hp_url), genOne, '次は「検証する」タブでファクトチェック。');
-    if(k==='regen'){ if(S.length && confirm(S.length+'件を作り直します。手直しした内容は消えます。よろしいですか？')) runBatch(p, 'AI作り直し', S.filter(c=>c.hp_url), genOne, '次は「検証する」タブでファクトチェック。'); }
-    if(k==='fact')  runBatch(p, 'ファクトチェック', S.filter(c=>!!getGen(c)), factOne, 'OKの院は「③ 送信」へ。要確認は「直す」タブへ移りました。');
+    if(k==='gen')   runBatch(p, 'AI生成', S.filter(c=>c.hp_url), c=>runPipeline(c), '次は「検証する」タブでファクトチェック。');
+    if(k==='regen'){ if(S.length && confirm(S.length+'件の文面を作り直します（集めた材料はそのまま使います）。手直しした内容は消えます。よろしいですか？')) runBatch(p, 'AI作り直し', S.filter(c=>c.hp_url), async c=>{ await resetWrite(c); await runPipeline(c); }, '次は「検証する」タブでファクトチェック。'); }
+    if(k==='fact')  runBatch(p, 'ファクトチェック', S.filter(c=>!!getGen(c)), c=>runFact(c), 'OKの院は「③ 送信」へ。要確認は「直す」タブへ移りました。');
+    if(k==='dupkeep') return;
     if(k==='csvin') $('csvFile').click();
     if(k==='csvout') exportCSV();
   });
@@ -1192,7 +1432,7 @@ $('csvFile').onchange = async e=>{
   const iIg = findCol(['Instagram URL','インスタURL','IG URL','Instagram','インスタ','インスタグラム','アカウントURL']);
   const idx = n => head.indexOf(n);
   const existingNames = new Set(clinics.map(c=>c.name));
-  const existingUrls = new Set(clinics.map(c=>(c.hp_url||'').replace(/\/$/,'')).filter(Boolean));
+  const existingUrls = new Set(clinics.map(c=>normUrl(c.hp_url)).filter(Boolean));
   const CTM_KEYS = ['コンセプト','専門・資格','経歴','発信','新着','拡大シグナル'];
   const recs = rows.slice(1).map(r=>{
     const g = n => idx(n)>=0 ? (r[idx(n)]||'').trim() : '';
@@ -1204,7 +1444,7 @@ $('csvFile').onchange = async e=>{
       phone:cell(iPhone), address:cell(iAddr), ig_url:cell(iIg),
       hp_url:url, hp_excerpt:g('HP抜粋').slice(0,2000), ctm, status:g('状況')||'未送信' };
   }).filter(r=>r.name || r.hp_url)
-    .filter(r=>!existingNames.has(r.name) && !(r.hp_url && existingUrls.has(r.hp_url.replace(/\/$/,''))));
+    .filter(r=>!existingNames.has(r.name) && !(r.hp_url && existingUrls.has(normUrl(r.hp_url))));
   if(!recs.length){ toast('追加対象なし（全て登録済み）'); return; }
   const { error } = await sb.from('clinics').insert(recs);
   if(error){ toast('取込失敗: '+error.message); return; }
@@ -1263,8 +1503,8 @@ const FLOW = [
     { k:'excluded', br:true, how:'窓口なし・送らない院 → IG DM／テレアポに回す' },
   ]},
   { p:'write', steps:[
-    { k:'write',  no:'5', how:'「選択をAI生成」— HPを読んで個別化パートを作る（kimi-k3・1件約2分）' },
-    { k:'verify', no:'6', how:'「選択をファクトチェック」— 別モデル（kimi-k2.6）が事実・宛名・診療科・トーンを検証' },
+    { k:'write',  no:'5', how:'「選択をAI生成」— 材料集め（人→特徴・動き）→執筆。工程ごとに保存し、失敗しても押し直せばそこから再開（1件約2〜3分）' },
+    { k:'verify', no:'6', how:'「選択をファクトチェック」— 別モデル（kimi-k2.6）が「事実の裏付け」と「宛名・診療科・表現」を同時に検証' },
     { k:'fix',    br:true, how:'指摘を直して「修正を保存」→ 6 に戻って再検証' },
   ]},
   { p:'send', steps:[
