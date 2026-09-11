@@ -457,14 +457,24 @@ function danLabel(slot){
 }
 
 /* ============ 詳細画面 ============ */
-function fieldsResult(){
+function fieldsResult(base){
+  // 編集欄の内容を採用しつつ、生成時の段・根拠（dan/basis）は引き継ぐ（検品表示が「省略」に化けるのを防ぐ）
+  base = base || {};
+  const slot = (b, text) => {
+    const o = Object.assign({}, b||{});
+    o.text = text;
+    if(!text) o.dan = 0;
+    else if(!o.dan) o.dan = '手';   // 生成物になく手書きで足した場合
+    if(b && b.text && b.text !== text) o.basis = (o.basis||'') + '（送信者が手直し）';
+    return o;
+  };
   return {
     clinic: sel.name,
     director: $('dDirector') ? $('dDirector').value.trim() : (sel.director_name||''),
     concise: $('dConcise') ? $('dConcise').checked : false,
-    why_you: { text: $('dYou').value.trim() },
-    why_now: { text: $('dNow').value.trim() },
-    kasetsu: { text: $('dKa').value.trim() },
+    why_you: slot(base.why_you, $('dYou').value.trim()),
+    why_now: slot(base.why_now, $('dNow').value.trim()),
+    kasetsu: slot(base.kasetsu, $('dKa').value.trim()),
   };
 }
 function chipTpl(kind, v){
@@ -552,7 +562,7 @@ function renderDetail(){
 
     <h2 class="sec">個別化パート</h2>
     <label>宛名（院長名。空欄なら「院長先生」）</label>
-    <input type="text" id="dDirector" value="${esc(c.director_name||'')}">
+    <input type="text" id="dDirector" value="${esc(c.director_name || (g&&g.result&&g.result.director) || '')}">
     <label>Why you（あなただから）</label>
     <textarea id="dYou" rows="3">${esc(g&&g.result&&g.result.why_you&&g.result.why_you.text||'')}</textarea>
     <label>Why now（いまだから・任意。不自然なら空欄でよい）</label>
@@ -676,7 +686,7 @@ async function updClinic(patch){
 function doAssemble(){
   const g = getGen(sel);
   const base = (g && g.result) ? g.result : {};
-  const f = fieldsResult();
+  const f = fieldsResult(base);
   const r = Object.assign({}, base, f, { clinic: sel.name });
   $('letter').value = assemble(r, view==='form', sel.department||'');
   if(g && g.result) renderKenpin(Object.assign({},g.result,f), g.src);
@@ -717,8 +727,12 @@ async function genOne(c){
   const r = await callFn('generate', { source_text: sc.text, clinic_name: c.name, department: c.department, materials });
   genCache[c.id] = { result: r, src: sc.text };
   const gen = { result: r, src: sc.text, at: new Date().toISOString() };
-  const { error } = await sb.from('clinics').update({ gen }).eq('id', c.id);
-  if(!error) c.gen = gen;
+  const patch = { gen };
+  // AIがHPから読み取った院長名は、その場でDBに保存する（宛名・リストの「欠: 院長名」に反映）
+  const d = (r.director||'').trim();
+  if(d && !c.director_name) patch.director_name = d;
+  const { error } = await sb.from('clinics').update(patch).eq('id', c.id);
+  if(!error) Object.assign(c, patch);
   return { r, sc };
 }
 async function aiGenerate(){
@@ -748,7 +762,7 @@ async function markSent(){
   const c = sel, g = getGen(c);
   const body = $('letter').value.trim();
   if(!body){ toast('文面が空です。先に組み立ててください'); return; }
-  const f = fieldsResult();
+  const f = fieldsResult(g && g.result);
   const draftType = f.why_you.text ? 'CTM' : '汎用';
   const channel = view==='form' ? 'フォーム' : (c.send_channel==='フォーム'?'フォーム':'メール');
   const { data: draft, error: e1 } = await sb.from('drafts').insert({
