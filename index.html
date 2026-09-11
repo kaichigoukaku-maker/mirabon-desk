@@ -1382,7 +1382,7 @@ async function runBatch(p, label, items, fn, doneMsg){
   }
   await Promise.all(Array.from({ length: Math.min(CONC, items.length) }, worker));
   busy[p] = false; items.forEach(c=>selIds.delete(c.id));
-  setMsg(`${label}完了 ${done}件／失敗 ${ng}件。${doneMsg||''}` + (ng ? '　失敗した院は一覧に赤字で理由が出ます。もう一度押すと、失敗した工程から再開します。' : ''));
+  setMsg(`${label}完了 ${done}件／失敗 ${ng}件。` + (typeof doneMsg==='function' ? doneMsg(items, ng) : (doneMsg||'')) + (ng ? '　失敗した院は一覧に赤字で理由が出ます。もう一度押すと、失敗した工程から再開します。' : ''));
   if(errs.length) console.warn(label+'の失敗:', errs);
   renderAll({ keepDetail: !(sel && items.includes(sel)) });
 }
@@ -1390,7 +1390,12 @@ async function runBatch(p, label, items, fn, doneMsg){
   $('tb_'+p).addEventListener('click', e=>{
     const b = e.target.closest('[data-batch]'); if(!b || b.disabled) return;
     const k = b.dataset.batch, S = selectedIn();
-    if(k==='hp')    runBatch(p, 'HP補完', S.filter(c=>!c.hp_url), hpOne, '確実なものは自動で確定。確証がない院は「HPを確認」に移りました。');
+    // 「完了」は処理した件数。見つかったかどうかは内訳で出す（完了14件なのに13件残っている、と誤解されたため）
+    if(k==='hp')    runBatch(p, 'HP補完', S.filter(c=>!c.hp_url), hpOne, (items, ng)=>{
+      const a = items.filter(c=>c.hp_url).length, q = items.filter(c=>!c.hp_url && c.research && c.research.findhp && c.research.findhp.url).length;
+      const n = Math.max(0, items.length - a - q - ng);
+      return `内訳：自動で確定 ${a}件／「HPを確認」へ ${q}件／見つからず ${n}件` + (n ? '（このタブに残ります。行内にURLを貼ってください）' : '') + '。';
+    });
     if(k==='res')   runBatch(p, '導線調査', S.filter(c=>c.hp_url), researchOne, '送り先が見つかった院は「② 文面・検証」へ移りました。');
     if(k==='gen')   runBatch(p, 'AI生成', S.filter(c=>c.hp_url), c=>runPipeline(c), '次は「検証する」タブでファクトチェック。');
     if(k==='regen'){ if(S.length && confirm(S.length+'件の文面を作り直します（集めた材料はそのまま使います）。手直しした内容は消えます。よろしいですか？')) runBatch(p, 'AI作り直し', S.filter(c=>c.hp_url), async c=>{ await resetWrite(c); await runPipeline(c); }, '次は「検証する」タブでファクトチェック。'); }
