@@ -161,6 +161,26 @@ table.stat{border-collapse:collapse;width:100%;font-size:13px;background:var(--s
 table.stat th,table.stat td{padding:8px 12px;border-top:1px solid var(--line);text-align:left;font-variant-numeric:tabular-nums}
 table.stat th{font-size:11px;color:var(--sub);border-top:none}
 .foot{font-size:11.5px;color:var(--sub);margin-top:20px;border-top:1px solid var(--line);padding-top:10px}
+/* 設定画面の右：全体の流れ */
+.setwrap{display:grid;grid-template-columns:minmax(0,760px) minmax(300px,460px);gap:32px;align-items:start;max-width:1320px}
+.flowbox{position:sticky;top:0;background:var(--sheet);border:1px solid var(--line);border-radius:10px;padding:18px 20px}
+.flowbox h3{margin:0 0 2px;font-size:15px}
+.flowbox .lead{font-size:12px;color:var(--sub);margin:0 0 12px}
+.fphase{border-left:3px solid var(--accent);padding:2px 0 2px 12px;margin-top:10px}
+.fphase .ph{font-size:12.5px;font-weight:700;color:var(--accent-ink);margin-bottom:4px}
+.fstep{display:grid;grid-template-columns:20px 1fr auto;gap:2px 8px;padding:5px 6px;border-radius:6px;cursor:pointer;align-items:baseline}
+.fstep:hover{background:var(--accent-weak)}
+.fstep .no{font-size:11px;font-weight:700;color:var(--sub);text-align:center}
+.fstep .nm{font-size:13px;font-weight:700}
+.fstep .ct{font-size:12px;font-weight:700;font-variant-numeric:tabular-nums;color:var(--accent-ink)}
+.fstep .ct.zero{color:var(--sub);font-weight:400}
+.fstep .how{grid-column:2/-1;font-size:11.5px;color:var(--sub);line-height:1.55}
+.fstep.branch{margin-left:14px}
+.fstep.branch .no{color:var(--warn)}
+.farrow{text-align:center;color:var(--sub);font-size:12px;margin:4px 0 0}
+.fnote h4{font-size:12px;margin:16px 0 4px;color:var(--sub);letter-spacing:.08em}
+.fnote ul{margin:0;padding-left:18px;font-size:12px;line-height:1.75}
+@media(max-width:1100px){.setwrap{grid-template-columns:1fr}.flowbox{position:static}}
 .toast{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);background:var(--ink);color:var(--paper);
   padding:8px 18px;border-radius:99px;font-size:12.5px;opacity:0;transition:.2s;pointer-events:none;z-index:50}
 .toast.on{opacity:1}
@@ -252,7 +272,8 @@ table.stat th{font-size:11px;color:var(--sub);border-top:none}
 </main>
 
 <main id="tSettings" class="single" hidden>
-  <section class="pane" style="max-width:760px">
+  <section class="pane setwrap">
+  <div>
     <h2 class="sec" style="margin-top:0">固定文（一字も揺らさない部分。変更はここ1箇所）</h2>
     <div id="setForm"></div>
     <div class="btns"><button class="primary" id="setSave">保存</button><span class="status" id="setStat"></span></div>
@@ -265,6 +286,8 @@ table.stat th{font-size:11px;color:var(--sub);border-top:none}
     </div>
     <h2 class="sec">AIの設定</h2>
     <p style="font-size:13px">文面生成＝kimi-k3、ファクトチェック・HP検索＝kimi-k2.6（生成とは別モデルで検証するため）。SupabaseのSecretsに <b>MOONSHOT_API_KEY</b> が必要です。モデルは <b>GENERATE_MODEL</b> ／ <b>FACTCHECK_MODEL</b> ／ <b>FINDHP_MODEL</b> で差し替えられます。</p>
+  </div>
+  <aside class="flowbox" id="flowBox"></aside>
   </section>
 </main>
 </div>
@@ -1201,6 +1224,68 @@ const SET_KEYS = [
 ];
 function renderSettings(){
   $('setForm').innerHTML = SET_KEYS.map(([k,l])=>`<div><label>${l}</label><textarea data-k="${k}" rows="${(CONST[k]||'').length>60?3:1}">${esc(CONST[k]||'')}</textarea></div>`).join('');
+  renderFlow();
+}
+/* 全体の流れ（設定画面の右）。件数はいまのリストから数え、クリックでその工程に飛ぶ */
+const FLOW = [
+  { p:'prep', steps:[
+    { k:'csv',      no:'1', name:'CSV取込', how:'クリニック名かHP URLの列があればOK。電話・住所・Instagramの列もあると精度が上がる' },
+    { k:'find',     no:'2', how:'「選択をHP補完」で自動検索。見つからない院は行内にURLを貼る' },
+    { k:'confirm',  no:'3', how:'確証のない候補を開いて 採用／却下' },
+    { k:'research', no:'4', how:'「選択を導線調査」で問い合わせフォーム・メールを特定' },
+    { k:'excluded', br:true, how:'窓口なし・送らない院 → IG DM／テレアポに回す' },
+  ]},
+  { p:'write', steps:[
+    { k:'write',  no:'5', how:'「選択をAI生成」— HPを読んで個別化パートを作る（kimi-k3・1件約2分）' },
+    { k:'verify', no:'6', how:'「選択をファクトチェック」— 別モデル（kimi-k2.6）が事実・宛名・診療科・トーンを検証' },
+    { k:'fix',    br:true, how:'指摘を直して「修正を保存」→ 6 に戻って再検証' },
+  ]},
+  { p:'send', steps:[
+    { k:'send',    no:'7', how:'原稿を読んで Gmail下書き／フォームで送る →「送信した」' },
+    { k:'waiting', no:'8', how:'返事が来たら結果を記録' },
+    { k:'result',  no:'9', how:'返信あり／アポ獲得／断られた（集計に反映）' },
+  ]},
+];
+function renderFlow(){
+  const cnt = k => clinics.filter(c=>stageOf(c)===k).length;
+  const phases = FLOW.map((ph,i)=>`
+    ${i ? '<div class="farrow">↓</div>' : ''}
+    <div class="fphase"><div class="ph">${esc(PAGES[ph.p].label)}</div>
+      ${ph.steps.map(s=>{
+        const n = s.k==='csv' ? null : cnt(s.k);
+        return `<div class="fstep${s.br?' branch':''}" data-p="${ph.p}" data-k="${s.k}">
+          <span class="no">${s.br ? '└' : s.no}</span>
+          <span class="nm">${esc(s.name || STAGE_LABEL[s.k])}</span>
+          <span class="ct${n===0?' zero':''}">${n===null ? '' : n+'件'}</span>
+          <span class="how">${esc(s.how)}</span>
+        </div>`;
+      }).join('')}
+    </div>`).join('');
+  $('flowBox').innerHTML = `
+    <h3 class="serif">全体の流れ</h3>
+    <p class="lead">リストを入れてから返事が来るまで、院は上から順に進みます。数字はいまの件数。クリックでその工程へ移動します。</p>
+    ${phases}
+    <div class="fnote">
+      <h4>毎日のルール</h4>
+      <ul>
+        <li>送信は1日30件まで。時間帯は10–12時／13–15時</li>
+        <li>フォームへの再送はしない（追いメールはメアドのある院だけ）</li>
+        <li>NG先：美容外科（院長以外）、TCB／SBC／品川美容外科の院長</li>
+        <li>文面の固定部分は左の設定で変える（保存すると全員に即反映）</li>
+      </ul>
+      <h4>困ったとき</h4>
+      <ul>
+        <li>院が見つからない → 上の検索窓（どの工程にいても出る）</li>
+        <li>HPや送り先が違った → ② の「HP・送り先を直す」</li>
+        <li>送る直前に文面を直したい → ③ の「文面を直す」</li>
+      </ul>
+    </div>`;
+  $('flowBox').querySelectorAll('.fstep').forEach(el=>el.onclick = ()=>{
+    const p = el.dataset.p, k = el.dataset.k;
+    if(k!=='csv') sub[p] = k;
+    filt.dept = ''; filt.star = false; selIds.clear(); sel = null; sendIdx = 0; sendView = null; editId = null; hlId = null;
+    go(p);
+  });
 }
 $('myPwBtn').onclick = async ()=>{
   const pw = $('myNewPw').value;
