@@ -24,13 +24,15 @@ body{margin:0;background:var(--paper);color:var(--ink);
   font-family:-apple-system,"Hiragino Sans","Yu Gothic",sans-serif;font-size:14px;line-height:1.7}
 .serif{font-family:"Shippori Mincho","Hiragino Mincho ProN",serif}
 [hidden]{display:none!important}
-header{display:flex;align-items:center;gap:14px;padding:12px 22px;border-bottom:1px solid var(--line);flex-wrap:wrap}
+header{display:flex;align-items:center;gap:14px;padding:10px 22px;border-bottom:1px solid var(--line);flex-wrap:wrap}
 header h1{margin:0;font-size:17px;font-weight:700}
-header .tag{font-size:11px;color:var(--sub);letter-spacing:.1em}
 header .sp{flex:1}
-.tabs{display:inline-flex;border:1px solid var(--line);border-radius:6px;overflow:hidden}
-.tabs button{border:none;border-radius:0;padding:6px 16px;background:var(--sheet);color:var(--ink);cursor:pointer;font-family:inherit;font-size:13px}
+.tabs{display:inline-flex;border:1px solid var(--line);border-radius:6px;overflow:hidden;flex-wrap:wrap}
+.tabs button{border:none;border-radius:0;padding:7px 16px;background:var(--sheet);color:var(--ink);cursor:pointer;font-family:inherit;font-size:13px}
 .tabs button.on{background:var(--accent-weak);color:var(--accent-ink);font-weight:700}
+.tabs .cnt{display:inline-block;margin-left:6px;font-size:11px;font-weight:700;padding:0 7px;border-radius:99px;background:var(--paper);color:var(--sub)}
+.tabs .cnt:empty{display:none}
+.tabs button.on .cnt{background:var(--sheet);color:var(--accent-ink)}
 .uinfo{font-size:12px;color:var(--sub)}
 button{font-family:inherit;font-size:13px;padding:7px 14px;border:1px solid var(--line);
   border-radius:6px;background:var(--sheet);color:var(--ink);cursor:pointer}
@@ -38,72 +40,97 @@ button:hover{border-color:var(--accent)}
 button.primary{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:700}
 button.primary:hover{background:var(--accent-ink)}
 button.mini{padding:3px 10px;font-size:12px}
+button.bigbtn{padding:11px 22px;font-size:14px}
 button:disabled{opacity:.45;cursor:default}
 input[type=text],input[type=email],input[type=password],textarea,select{width:100%;font-family:inherit;font-size:13px;color:var(--ink);
   background:var(--sheet);border:1px solid var(--line);border-radius:6px;padding:8px 10px;line-height:1.6}
 textarea{resize:vertical}
 input:focus,textarea:focus,select:focus,button:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
 label{display:block;font-size:11px;font-weight:700;color:var(--sub);letter-spacing:.1em;margin:14px 0 5px}
-/* 左右で独立スクロール：画面全体は固定し、各ペインの中だけが動く */
+label.inl{display:inline;margin:0;font-size:12px;font-weight:400;letter-spacing:0}
+a{color:var(--accent-ink)}
+
+/* 全体検索 */
+.gsearch{position:relative;width:250px}
+.gsearch input{padding:5px 10px;font-size:12.5px}
+.gres{position:absolute;top:100%;left:0;right:0;z-index:30;background:var(--sheet);border:1px solid var(--line);border-radius:6px;margin-top:4px;box-shadow:0 6px 18px rgba(0,0,0,.14);max-height:340px;overflow:auto}
+.gres div{padding:7px 10px;font-size:12.5px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;gap:8px}
+.gres div:hover{background:var(--accent-weak)}
+
+/* レイアウト：各画面の中だけがスクロールする */
 #appView{height:100vh;display:flex;flex-direction:column;overflow:hidden}
 #appView > header{flex:none}
-main{flex:1 1 auto;min-height:0;display:grid;grid-template-columns:minmax(300px,380px) 1fr}
-#tStats,#tSettings{overflow-y:auto}
-.pane{padding:16px 20px;overflow-y:auto;min-height:0}
+main{flex:1 1 auto;min-height:0}
+main.split{display:grid;grid-template-columns:minmax(300px,390px) 1fr}
+main.single{display:block;overflow-y:auto}
+.pane{padding:16px 20px;min-height:0}
+main.split > .pane{overflow-y:auto}
 .pane.in{border-right:1px solid var(--line)}
-/* 絞り込みと一括ボタンはスクロールしても上に残す */
-.listhead{position:sticky;top:-16px;z-index:2;background:var(--paper);padding:16px 0 8px;margin:-16px 0 0}
+.pane.wide{max-width:1300px;margin:0 auto}
+.listhead{position:sticky;top:-16px;z-index:5;background:var(--paper);padding:16px 0 10px;margin:-16px 0 6px}
 @media(max-width:880px){
   #appView{height:auto;overflow:visible}
-  main{grid-template-columns:1fr}
-  .pane{overflow:visible}
+  main.split{grid-template-columns:1fr}
+  main.split > .pane,main.single{overflow:visible}
   .listhead{position:static;margin:0;padding:0 0 8px}
   .pane.in{border-right:none;border-bottom:1px solid var(--line)}
+  .gsearch{width:100%}
 }
+
+/* 工程タブ（各画面の上） */
+.subtabs{display:inline-flex;border:1px solid var(--line);border-radius:6px;overflow:hidden;flex-wrap:wrap}
+.subtabs button{border:none;border-radius:0;padding:6px 14px;font-size:12.5px}
+.subtabs button.on{background:var(--accent);color:#fff;font-weight:700}
+.subtabs button .n{margin-left:6px;font-size:11px;opacity:.8}
+.btns{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;align-items:center}
+.status{font-size:12.5px;color:var(--sub);margin:8px 0}
+.status b{color:var(--accent-ink)}
+.note{font-size:12px;color:var(--sub);margin-top:8px}
+
 /* ログイン */
 .authbox{max-width:360px;margin:80px auto;background:var(--sheet);border:1px solid var(--line);border-radius:10px;padding:26px}
 .authbox h1{font-size:18px;margin:0 0 4px}
 .authbox .tag{font-size:11px;color:var(--sub)}
 .err{color:var(--bad);font-size:12.5px;margin-top:10px}
 .okmsg{color:var(--ok);font-size:12.5px;margin-top:10px}
-/* リスト */
-.filters{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px}
-.filters select{width:auto;padding:5px 8px;font-size:12px}
-.filters input[type=text]{flex:1;min-width:120px;padding:5px 8px;font-size:12px}
+
+/* バッジ */
+.pill{display:inline-block;font-size:10.5px;font-weight:700;padding:0 7px;border-radius:99px;background:var(--accent-weak);color:var(--accent-ink);white-space:nowrap}
+.pill.warn{background:var(--warn-weak);color:var(--warn)}
+.pill.bad{background:var(--bad-weak);color:var(--bad)}
+.pill.dim{background:var(--paper);color:var(--sub);border:1px solid var(--line)}
+.sm{font-size:11.5px;color:var(--sub)}
+
+/* ① リスト整備：表 */
+.ptable{width:100%;border-collapse:collapse;background:var(--sheet);border:1px solid var(--line);border-radius:8px}
+.ptable th,.ptable td{padding:8px 10px;border-top:1px solid var(--line);vertical-align:top;font-size:12.5px;text-align:left}
+.ptable th{font-size:11px;color:var(--sub);letter-spacing:.06em;border-top:none;white-space:nowrap}
+.ptable tr.hl td{background:var(--warn-weak)}
+.ptable .nm{font-weight:700}
+.ptable td.namecol{min-width:170px}
+.ptable button{white-space:nowrap}
+.clip{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.ptable a{word-break:break-all}
+.editrow td{background:var(--paper)}
+.egrid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.egrid label{margin:0 0 3px}
+@media(max-width:880px){.egrid{grid-template-columns:1fr}}
+
+/* ② 文面・検証：一覧＋詳細 */
 .crow{display:grid;grid-template-columns:1fr auto;gap:4px 8px;padding:8px 10px;border:1px solid var(--line);
   border-radius:6px;margin-bottom:6px;cursor:pointer;background:var(--sheet);font-size:12.5px}
-.crow.sent{border-left:4px solid var(--warn)}
-.crow.replied{border-left:4px solid var(--ok)}
-.crow.dead{opacity:.55}
-.crow.ready{border-left:4px solid var(--accent)}
-.miss{color:var(--bad);font-weight:700}
-.full{color:var(--ok);font-weight:700}
 .crow:hover{border-color:var(--accent)}
 .crow.sel{border-color:var(--accent);background:var(--accent-weak)}
 .crow .nm{font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.crow .meta{grid-column:1/-1;color:var(--sub);font-size:11.5px;display:flex;gap:8px;flex-wrap:wrap}
-.pill{display:inline-block;font-size:10.5px;font-weight:700;padding:0 7px;border-radius:99px;background:var(--accent-weak);color:var(--accent-ink)}
-.pill.warn{background:var(--warn-weak);color:var(--warn)}
-.pill.bad{background:var(--bad-weak);color:var(--bad)}
-.pill.dim{background:var(--paper);color:var(--sub)}
-.lcount{font-size:11.5px;color:var(--sub);margin:4px 0 8px}
-/* 詳細 */
+.crow .meta{grid-column:1/-1;color:var(--sub);font-size:11.5px}
 h2.sec{font-size:12px;font-weight:700;color:var(--sub);letter-spacing:.14em;margin:20px 0 8px}
-h2.sec:first-child{margin-top:0}
 .dhead{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
 .dhead h2{margin:0;font-size:18px}
 .dhead .sub{font-size:12px;color:var(--sub)}
-.btns{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;align-items:center}
-.chips{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}
-.chip{font-size:12px;padding:4px 10px;border:1px solid var(--line);border-radius:99px;background:var(--sheet);cursor:pointer;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.chip:hover{border-color:var(--accent)}
-.chip .k{font-weight:700;color:var(--accent-ink);margin-right:4px}
-.chip.ng{opacity:.55;cursor:default}
-.sheet{background:var(--sheet);border:1px solid var(--line);border-radius:8px;padding:4px;margin-top:8px}
-#letter{border:none;background:transparent;min-height:320px;font-size:13.5px;padding:12px;width:100%}
 .seg{display:inline-flex;border:1px solid var(--line);border-radius:6px;overflow:hidden}
-.seg button{border:none;border-radius:0;padding:5px 13px}
+.seg button{border:none;border-radius:0;padding:5px 13px;font-size:12.5px}
 .seg button.on{background:var(--accent-weak);color:var(--accent-ink);font-weight:700}
+.letter{white-space:pre-wrap;font-size:13.5px;line-height:1.85;background:var(--sheet);border:1px solid var(--line);border-radius:8px;padding:14px 16px;margin-top:8px}
 .krow{display:grid;grid-template-columns:96px 1fr;gap:10px;padding:8px 2px;border-top:1px solid var(--line);font-size:12.5px}
 .krow .k{color:var(--sub);font-weight:700}
 .dan{display:inline-block;font-size:11px;font-weight:700;padding:0 7px;border-radius:99px;background:var(--accent-weak);color:var(--accent-ink);margin-right:6px}
@@ -112,24 +139,31 @@ h2.sec:first-child{margin-top:0}
 .quote .m{font-weight:700;color:var(--ok)}
 .quote.bad .m{color:var(--bad)}
 .alert{border-radius:6px;padding:9px 12px;font-size:12.5px;margin-top:8px}
+.alert.ok{background:var(--accent-weak);color:var(--ink)}
 .alert.bad{background:var(--bad-weak);color:var(--bad)}
 .alert.warn{background:var(--warn-weak);color:var(--warn)}
-.status{font-size:12.5px;color:var(--sub);margin:8px 0}
-.status b{color:var(--accent-ink)}
-.excerpt{font-size:12px;color:var(--sub);background:var(--sheet);border:1px solid var(--line);border-radius:6px;padding:8px 10px;max-height:120px;overflow:auto;white-space:pre-wrap}
-/* 集計 */
+
+/* ③ 送信：1件ずつのキュー */
+.queue{max-width:840px;margin:0 auto}
+.qhead{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin:4px 0 10px}
+.qcard{background:var(--sheet);border:1px solid var(--line);border-radius:10px;padding:18px 22px}
+.qcard .letter{background:var(--paper);max-height:50vh;overflow:auto}
+.win{font-size:12px;padding:2px 10px;border-radius:99px;font-weight:700}
+.win.ok{background:var(--accent-weak);color:var(--accent-ink)}
+.win.ng{background:var(--warn-weak);color:var(--warn)}
+
+/* 集計・設定 */
 .cards{display:flex;gap:10px;flex-wrap:wrap;margin:10px 0}
 .card{background:var(--sheet);border:1px solid var(--line);border-radius:8px;padding:12px 18px;min-width:110px}
 .card .n{font-size:24px;font-weight:700;font-variant-numeric:tabular-nums}
 .card .l{font-size:11px;color:var(--sub);font-weight:700;letter-spacing:.08em}
-table{border-collapse:collapse;width:100%;font-size:13px;background:var(--sheet);border:1px solid var(--line);border-radius:8px}
-th,td{padding:8px 12px;border-top:1px solid var(--line);text-align:left;font-variant-numeric:tabular-nums}
-th{font-size:11px;color:var(--sub);letter-spacing:.08em;border-top:none}
-.toast{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);background:var(--ink);color:var(--paper);
-  padding:8px 18px;border-radius:99px;font-size:12.5px;opacity:0;transition:.2s;pointer-events:none;z-index:9}
-.toast.on{opacity:1}
+table.stat{border-collapse:collapse;width:100%;font-size:13px;background:var(--sheet);border:1px solid var(--line)}
+table.stat th,table.stat td{padding:8px 12px;border-top:1px solid var(--line);text-align:left;font-variant-numeric:tabular-nums}
+table.stat th{font-size:11px;color:var(--sub);border-top:none}
 .foot{font-size:11.5px;color:var(--sub);margin-top:20px;border-top:1px solid var(--line);padding-top:10px}
-.setrow{margin-bottom:4px}
+.toast{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);background:var(--ink);color:var(--paper);
+  padding:8px 18px;border-radius:99px;font-size:12.5px;opacity:0;transition:.2s;pointer-events:none;z-index:50}
+.toast.on{opacity:1}
 </style>
 </head>
 <body>
@@ -146,7 +180,7 @@ th{font-size:11px;color:var(--sub);letter-spacing:.08em;border-top:none}
       <input type="password" id="aPw" autocomplete="current-password">
       <div class="btns">
         <button class="primary" id="aLogin">ログイン</button>
-        <button id="aReset" class="mini">パスワード再設定メール</button>
+        <button id="aReset" class="mini">パスワードを忘れた</button>
       </div>
     </div>
     <div id="setPwForm" hidden>
@@ -164,78 +198,62 @@ th{font-size:11px;color:var(--sub);letter-spacing:.08em;border-top:none}
 <div id="appView" hidden>
 <header>
   <h1 class="serif">診ラボン文面デスク</h1>
-  <span class="tag">取材依頼 — HPの原文だけから書く</span>
-  <span class="sp"></span>
   <nav class="tabs" id="tabs">
-    <button data-t="list" class="on">リスト</button>
+    <button data-t="prep" class="on">① リスト整備<span class="cnt" id="cnt_prep"></span></button>
+    <button data-t="write">② 文面・検証<span class="cnt" id="cnt_write"></span></button>
+    <button data-t="send">③ 送信<span class="cnt" id="cnt_send"></span></button>
     <button data-t="stats">集計</button>
     <button data-t="settings">設定</button>
   </nav>
+  <div class="gsearch">
+    <input type="text" id="gQ" placeholder="院名で探す（どの工程でも）" autocomplete="off">
+    <div class="gres" id="gRes" hidden></div>
+  </div>
+  <span class="sp"></span>
   <span class="uinfo" id="uEmail"></span>
   <button class="mini" id="logout">ログアウト</button>
 </header>
 
-<main id="tList">
-  <section class="pane in">
-    <div class="listhead">
-    <div class="filters">
-      <input type="text" id="fQ" placeholder="クリニック名で検索">
-      <select id="fDept"><option value="">診療科</option></select>
-      <select id="fCh"><option value="">送信手段</option></select>
-      <select id="fSt"><option value="">状況</option>
-        <option>未送信</option><option>送信済</option><option>返信あり</option><option>アポ</option><option>辞退</option><option>NG</option></select>
-      <select id="fPr">
-        <option value="">すべて</option>
-        <option value="ready">送信可（文面まで完成）</option>
-        <option value="sendable">送れる先のみ（メール/フォーム）</option>
-        <option value="unres">未調査のみ</option>
-        <option value="res">調査済みのみ</option>
-        <option value="miss">情報に欠けあり</option>
-        <option value="full">情報◎（欠けなし）</option>
-        <option value="factng">ファクトチェック要確認</option>
-        <option value="unfact">未検証（文面あり）</option>
-        <option value="cand">HP候補（承認待ち）</option>
-        <option value="nohp">HPなし（手貼り対象）</option>
-        <option value="1">★のみ</option>
-      </select>
-    </div>
-    <div class="btns" style="margin-top:6px">
-      <label style="display:inline;margin:0;font-size:12px;font-weight:400;letter-spacing:0"><input type="checkbox" id="cbAll" style="vertical-align:-2px"> 表示中を全選択</label>
-      <span class="status" id="selCount" style="margin:0"></span>
-    </div>
-    <div class="btns">
-      <button class="primary mini" id="aiBatch">選択をAI生成</button>
-      <button class="mini" id="factBatch">選択をファクトチェック</button>
-      <button class="mini" id="resBatch">選択を導線調査</button>
-      <button class="mini" id="hpBatch">選択をHP補完</button>
-      <button class="mini" id="csvIn">CSV取込</button>
-      <button class="mini" id="csvOut">CSV書き出し</button>
-      <input type="file" id="csvFile" accept=".csv" hidden>
-    </div>
-    <div class="status" id="batchStat" style="margin:4px 0 0"></div>
-    <div class="lcount" id="lCount"></div>
-    </div>
-    <div id="clist"></div>
-  </section>
-
-  <section class="pane" id="detail">
-    <div class="status">左のリストからクリニックを選んでください。</div>
+<!-- ① リスト整備 -->
+<main id="pPrep" class="single">
+  <section class="pane wide">
+    <div class="listhead" id="tb_prep"></div>
+    <div id="prepBody"></div>
   </section>
 </main>
 
-<main id="tStats" hidden style="display:block">
-  <section class="pane">
+<!-- ② 文面・検証 -->
+<main id="pWrite" class="split" hidden>
+  <section class="pane in">
+    <div class="listhead" id="tb_write"></div>
+    <div id="clist"></div>
+  </section>
+  <section class="pane" id="detail"></section>
+</main>
+
+<!-- ③ 送信 -->
+<main id="pSend" class="single" hidden>
+  <section class="pane wide">
+    <div class="listhead" id="tb_send"></div>
+    <div id="sendBody"></div>
+  </section>
+</main>
+
+<main id="tStats" class="single" hidden>
+  <section class="pane wide">
+    <h2 class="sec" style="margin-top:0">工程ごとの件数</h2>
+    <div class="cards" id="stageCards"></div>
     <h2 class="sec">送信・返信の実績</h2>
     <div class="cards" id="statCards"></div>
     <h2 class="sec">文面タイプ別（CTM × 汎用の比較）</h2>
-    <div style="overflow-x:auto"><table id="statTable"></table></div>
+    <div style="overflow-x:auto"><table class="stat" id="statTable"></table></div>
     <div class="foot">返信率は「返信あり＋アポ」÷ 送信数。20件たまった時点でCTM×汎用を比較する（decisions.md 2026-08-27）。</div>
   </section>
 </main>
 
-<main id="tSettings" hidden style="display:block">
+<main id="tSettings" class="single" hidden>
   <section class="pane" style="max-width:760px">
-    <h2 class="sec">固定文（一字も揺らさない部分。変更はここ1箇所）</h2>
+    <h2 class="sec" style="margin-top:0">固定文（一字も揺らさない部分。変更はここ1箇所）</h2>
     <div id="setForm"></div>
     <div class="btns"><button class="primary" id="setSave">保存</button><span class="status" id="setStat"></span></div>
     <h2 class="sec">チームメンバーの追加</h2>
@@ -245,12 +263,13 @@ th{font-size:11px;color:var(--sub);letter-spacing:.08em;border-top:none}
       <input type="password" id="myNewPw" placeholder="新しいパスワード（8文字以上）" autocomplete="new-password">
       <div class="btns"><button id="myPwBtn" class="mini">変更する</button><span class="status" id="myPwStat"></span></div>
     </div>
-    <h2 class="sec">AI生成の設定</h2>
-    <p style="font-size:13px">AI文面生成・HP補完はKimi（Moonshot AI）を使います。SupabaseのSecretsに <b>MOONSHOT_API_KEY</b> の設定が必要です（管理者作業。キーは https://platform.kimi.ai で発行）。モデルは <b>GENERATE_MODEL</b> で変更可（既定: kimi-k3＝最上位モデル）。未設定の間も、材料チップと手書きで文面は作れます。</p>
+    <h2 class="sec">AIの設定</h2>
+    <p style="font-size:13px">文面生成＝kimi-k3、ファクトチェック・HP検索＝kimi-k2.6（生成とは別モデルで検証するため）。SupabaseのSecretsに <b>MOONSHOT_API_KEY</b> が必要です。モデルは <b>GENERATE_MODEL</b> ／ <b>FACTCHECK_MODEL</b> ／ <b>FINDHP_MODEL</b> で差し替えられます。</p>
   </section>
 </main>
 </div>
 
+<input type="file" id="csvFile" accept=".csv" hidden>
 <div class="toast" id="toast"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
@@ -261,11 +280,65 @@ const inviteFlow = /type=(invite|recovery|signup)/.test(location.hash);
 const sb = window.supabase.createClient(SB_URL, SB_ANON);
 const $ = id => document.getElementById(id);
 const esc = s => String(s??'').replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-function toast(m){ const t=$('toast'); t.textContent=m; t.classList.add('on'); setTimeout(()=>t.classList.remove('on'),1800); }
+function toast(m){ const t=$('toast'); t.textContent=m; t.classList.add('on'); clearTimeout(toast._t); toast._t=setTimeout(()=>t.classList.remove('on'),2200); }
+const host = u => { try{ return new URL(u).hostname.replace(/^www\./,''); }catch(e){ return u; } };
+const fmtDate = s => { try{ const d=new Date(s); return `${d.getMonth()+1}/${d.getDate()} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`; }catch(e){ return ''; } };
+
+/* ============ 工程の定義（すべての画面・件数・検索がこれを使う） ============ */
+const PAGES = {
+  prep:  { label:'① リスト整備', stages:['find','confirm','research','excluded'], tabs:['find','confirm','research','excluded','all'] },
+  write: { label:'② 文面・検証', stages:['write','verify','fix'],               tabs:['write','verify','fix'] },
+  send:  { label:'③ 送信',       stages:['send','waiting','result'],            tabs:['send','waiting','result'] },
+};
+const STAGE_LABEL = {
+  find:'HPを探す', confirm:'HPを確認', research:'送り先を調べる', excluded:'対象外', all:'すべて',
+  write:'文面を作る', verify:'検証する', fix:'直す',
+  send:'送る', waiting:'返事待ち', result:'返信・結果',
+};
+const NOTE = {
+  find:'HPが見つかっていない院。「選択をHP補完」で自動検索し、見つからない院は行内にURLを貼ってください。',
+  confirm:'自動検索で候補は出たが確証がない院。リンクを開いて確かめ、採用／却下してください。',
+  research:'HPから問い合わせフォーム・メールを探します。見つからない院は「編集」で手入力できます。',
+  excluded:'窓口がない・送らないと決めた院。IG DM／テレアポに回してください。',
+  all:'すべての院。「編集」からHP・電話・送り先・メモを直せます。',
+  write:'AIがHPを読んで個別化パートを作ります（1件約2分・同時2件）。',
+  verify:'生成とは別のモデルで、事実の裏付け・宛名・診療科・トーンを検証します。OKなら ③送信 に移ります。',
+  fix:'検証で指摘が出た院。右で直して「修正を保存」→ もう一度ファクトチェック。',
+  waiting:'送信済みで返事を待っている院。返事が来たら結果を記録してください。',
+  result:'返信・アポ・お断りの記録。',
+};
+const ST_LABEL = { '未送信':'未送信', '送信済':'返事待ち', '返信あり':'返信あり', 'アポ':'アポ獲得', '辞退':'断られた', 'NG':'送らない' };
+
+function stageOf(c){
+  if(c.status==='送信済') return 'waiting';
+  if(['返信あり','アポ','辞退'].includes(c.status)) return 'result';
+  if(c.status==='NG') return 'excluded';
+  if(!c.hp_url){
+    const f = c.research && c.research.findhp;
+    return (f && f.url && !f.rejected) ? 'confirm' : 'find';
+  }
+  if(!(c.email || c.form_url)){
+    return ['未対応','取得失敗'].includes(c.send_channel) ? 'excluded' : 'research';
+  }
+  if(!(c.gen && c.gen.result)) return 'write';
+  if(!c.factcheck) return 'verify';
+  if(c.factcheck.verdict !== 'OK') return 'fix';
+  return 'send';
+}
+function pageOf(st){ for(const [p,v] of Object.entries(PAGES)) if(v.stages.includes(st)) return p; return 'prep'; }
 
 /* ============ 状態 ============ */
-let clinics = [], CONST = {}, sel = null, view = 'mail', user = null;
-const genCache = {};   // clinic_id -> {result, src}
+let clinics = [], CONST = {}, user = null, sendLogs = [];
+let page = 'prep';
+const sub  = { prep:'find', write:'write', send:'send' };
+const filt = { dept:'', star:false };
+const busy = { prep:false, write:false, send:false };
+const bmsg = { prep:'', write:'', send:'' };
+const selIds = new Set();
+const genCache = {};
+let sel = null, view = 'mail';           // ② で開いている院・プレビュー形式
+let sendIdx = 0, sendView = null;        // ③ キューの位置・形式（null=送り先に合わせて自動）
+let editId = null, hlId = null;          // ① 編集中の行・検索で飛んだ行
 
 /* ============ 認証 ============ */
 async function boot(){
@@ -287,9 +360,8 @@ $('aLogin').onclick = async ()=>{
   if(error){ $('aErr').textContent = 'ログインできません：' + error.message; return; }
   user = data.user; await enter();
 };
-$('aReset').onclick = ()=>{
-  $('aOk').textContent = 'パスワードを忘れた場合は管理者（嶋崎）に連絡してください。ダッシュボードから再設定できます。';
-};
+$('aPw').addEventListener('keydown', e=>{ if(e.key==='Enter') $('aLogin').click(); });
+$('aReset').onclick = ()=>{ $('aOk').textContent = '管理者（嶋崎）に連絡してください。ダッシュボードから再設定できます。'; };
 $('aSetPw').onclick = async ()=>{
   const pw = $('aNewPw').value;
   if(pw.length < 8){ $('aErr').textContent='8文字以上にしてください'; return; }
@@ -300,137 +372,459 @@ $('aSetPw').onclick = async ()=>{
 };
 $('logout').onclick = async ()=>{ await sb.auth.signOut(); location.reload(); };
 
-/* ============ データ読込 ============ */
+/* ============ データ ============ */
 async function loadAll(){
-  const [c, s] = await Promise.all([
-    sb.from('clinics').select('*').order('name').limit(1000),
-    sb.from('app_settings').select('*').eq('key','constants').single()
+  const [c, s, l] = await Promise.all([
+    sb.from('clinics').select('*').order('name').limit(3000),
+    sb.from('app_settings').select('*').eq('key','constants').single(),
+    sb.from('send_log').select('*').order('sent_at',{ascending:false}).limit(5000),
   ]);
   if(c.error){ toast('リスト取得に失敗: '+c.error.message); return; }
   clinics = c.data || [];
   CONST = (s.data && s.data.value) || {};
-  buildFilters(); renderList();
+  sendLogs = l.data || [];
+  renderAll();
 }
-function buildFilters(){
-  const depts = [...new Set(clinics.map(x=>x.department).filter(Boolean))].sort();
-  const chs = [...new Set(clinics.map(x=>x.send_channel).filter(Boolean))].sort();
-  $('fDept').innerHTML = '<option value="">診療科</option>' + depts.map(d=>`<option>${esc(d)}</option>`).join('');
-  $('fCh').innerHTML = '<option value="">送信手段</option>' + chs.map(d=>`<option>${esc(d)}</option>`).join('');
+async function upd(c, patch){
+  const { error } = await sb.from('clinics').update(patch).eq('id', c.id);
+  if(error){ toast('保存失敗: '+error.message); return false; }
+  Object.assign(c, patch); return true;
 }
-function filtered(){
-  const q=$('fQ').value.trim(), d=$('fDept').value, ch=$('fCh').value, st=$('fSt').value, pr=$('fPr').value;
-  return clinics.filter(c=>
-    (!q || (c.name||'').includes(q) || (c.ig_name||'').includes(q)) &&
-    (!d || c.department===d) &&
-    (!ch || c.send_channel===ch) &&
-    (!st || c.status===st) &&
-    (pr!=='1' || c.priority) &&
-    (pr!=='sendable' || ['メール','フォーム'].includes(c.send_channel)) &&
-    (pr!=='ready' || rowState(c).ready) &&
-    (pr!=='unres' || !rowState(c).researched) &&
-    (pr!=='res' || rowState(c).researched) &&
-    (pr!=='miss' || rowState(c).missing.length>0) &&
-    (pr!=='full' || rowState(c).missing.length===0) &&
-    (pr!=='factng' || rowState(c).factNg) &&
-    (pr!=='unfact' || (!!c.gen && !c.factcheck)) &&
-    (pr!=='cand' || rowState(c).cand) &&
-    (pr!=='nohp' || (!c.hp_url && !rowState(c).cand))
-  );
+function lastLogMap(){ const m = {}; sendLogs.forEach(l=>{ if(!m[l.clinic_id]) m[l.clinic_id] = l; }); return m; }
+function deptTokens(d){ return String(d||'').split(/[,、，\/・]/).map(s=>s.trim()).filter(Boolean); }
+function baseList(){ return clinics.filter(c=>(!filt.dept || deptTokens(c.department).includes(filt.dept)) && (!filt.star || c.priority)); }
+function stageList(st){ return st==='all' ? baseList() : baseList().filter(c=>stageOf(c)===st); }
+function curList(){ return stageList(sub[page]); }
+function selectedIn(){ return curList().filter(c=>selIds.has(c.id)); }
+function getGen(c){ return genCache[c.id] || (c.gen && c.gen.result ? { result:c.gen.result, src:c.gen.src||'' } : null); }
+
+/* ============ 画面切り替え ============ */
+const MAINS = { prep:'pPrep', write:'pWrite', send:'pSend', stats:'tStats', settings:'tSettings' };
+function go(p){
+  page = p;
+  Object.values(MAINS).forEach(id=>$(id).hidden = true);
+  $(MAINS[p]).hidden = false;
+  renderAll();
 }
-/* 1件の状態を判定（表示・フィルタ・集計で共通利用）
-   researched=導線調査を実行済み／missing=送信に必要な情報の欠け／ready=あとは送るだけ */
-function rowState(c){
-  const researched = !!(c.research && c.research.checked_at);
-  const cand = !c.hp_url && c.research && c.research.findhp && c.research.findhp.url && !c.research.findhp.rejected;
-  const hasDest = !!(c.email || c.form_url);
-  const missing = [];
-  if(!c.hp_url) missing.push('HP');
-  if(!hasDest && !['未対応','取得失敗'].includes(c.send_channel)) missing.push('宛先');
-  if(!c.phone) missing.push('TEL');
-  if(!c.director_name) missing.push('院長名');
-  const dead = ['未対応','取得失敗'].includes(c.send_channel) || ['NG','辞退'].includes(c.status);
-  const sent = c.status==='送信済';
-  const replied = ['返信あり','アポ'].includes(c.status);
-  const fc = c.factcheck || null;
-  const factOk = !!fc && fc.verdict === 'OK';
-  const factNg = !!fc && fc.verdict !== 'OK';
-  // 「送信可（緑）」はファクトチェックOKまで通った院だけ。未検証は黄色の準備中扱い
-  const ready = !sent && !replied && !dead && c.hp_url && hasDest && !!c.gen && factOk;
-  const cls = replied ? 'replied' : (sent ? 'sent' : (dead ? 'dead' : (ready ? 'ready' : '')));
-  return { researched, cand, hasDest, missing, dead, sent, replied, ready, cls, fc, factOk, factNg };
+$('tabs').onclick = e=>{
+  const b = e.target.closest('button'); if(!b) return;
+  selIds.clear(); hlId = null; editId = null;
+  go(b.dataset.t);
+};
+function renderTabs(){
+  const n = st => clinics.filter(c=>stageOf(c)===st).length;
+  $('cnt_prep').textContent  = (n('find')+n('confirm')+n('research')) || '';
+  $('cnt_write').textContent = (n('write')+n('verify')+n('fix')) || '';
+  $('cnt_send').textContent  = n('send') || '';
+  [...$('tabs').children].forEach(b=>b.classList.toggle('on', b.dataset.t===page));
 }
-function renderList(){
-  const list = filtered();
-  const n = f => list.filter(f).length;
-  $('lCount').innerHTML = `${list.length} 件（全 ${clinics.length} 件）`
-    + `　<span style="color:var(--accent-ink)">送信可 ${n(c=>rowState(c).ready)}</span>`
-    + `　調査済 ${n(c=>rowState(c).researched)}`
-    + `　検証✓ ${n(c=>rowState(c).factOk)}`
-    + `　<span style="color:var(--bad)">要確認 ${n(c=>rowState(c).factNg)}</span>`
-    + `　送信済 ${n(c=>c.status==='送信済')}`;
-  $('clist').innerHTML = list.map(c=>{
-    const s = rowState(c);
-    // 1段目バッジ：HP → 導線調査 → 文面
-    const stage =
-      (c.hp_url?'<span class="pill">HP✓</span>':(s.cand?'<span class="pill warn">HP候補</span>':'<span class="pill dim">HPなし</span>')) +
-      (s.researched
-        ? (['未対応','取得失敗'].includes(c.send_channel)
-            ? `<span class="pill bad">調査済 ${esc(c.send_channel)}</span>`
-            : `<span class="pill">調査済 ${esc(c.send_channel||'')}${c.captcha?'･CAPTCHA':''}</span>`)
-        : (c.send_channel ? `<span class="pill warn">未調査（CSV:${esc(c.send_channel)}）</span>` : '<span class="pill dim">未調査</span>')) +
-      (c.gen?'<span class="pill">文面✓</span>':'<span class="pill dim">文面 未</span>') +
-      (s.factOk?'<span class="pill">検証✓</span>':(s.factNg?`<span class="pill bad">要確認${(s.fc.counts&&s.fc.counts.ng)?' '+s.fc.counts.ng:''}</span>`:(c.gen?'<span class="pill dim">未検証</span>':'')));
-    // 2段目：情報の欠け（HP/宛先/TEL/院長名）
-    const info = s.missing.length
-      ? `<span class="miss">欠: ${s.missing.join('・')}</span>`
-      : '<span class="full">情報◎</span>';
-    const meta = [c.department ? esc(c.department) : null, c.director_name ? '院長 '+esc(c.director_name) : null].filter(Boolean).join('　');
-    const cls = ['crow', sel && sel.id===c.id?'sel':'', s.cls].filter(Boolean).join(' ');
-    return `
-    <div class="${cls}" data-id="${c.id}">
-      <span class="nm"><input type="checkbox" class="cb" data-id="${c.id}" ${selIds.has(c.id)?'checked':''} style="vertical-align:-2px;margin-right:6px">${c.priority?'★ ':''}${esc(c.name)}</span>
-      <span class="pill ${c.status==='未送信'?'dim':(c.status==='NG'||c.status==='辞退'?'bad':(c.status==='送信済'?'warn':''))}">${esc(c.status||'')}</span>
-      <span class="meta" style="gap:4px">${stage}</span>
-      <span class="meta" style="gap:8px">${info}${meta?`<span>${meta}</span>`:''}</span>
-    </div>`;
-  }).join('') || '<div class="status">該当なし</div>';
-  updSelCount();
+function renderAll(opts){
+  opts = opts || {};
+  renderTabs();
+  if(page==='prep') renderPrep();
+  else if(page==='write') renderWrite(opts.keepDetail);
+  else if(page==='send') renderSend();
+  else if(page==='stats') renderStats();
+  else if(page==='settings') renderSettings();
 }
-const selIds = new Set();
-// 絞り込みを変えたら、表示から外れた院の選択は捨てる（選択＝いま見えているものだけ、を保証）
-function pruneSel(){
-  const ids = new Set(filtered().map(c=>c.id));
-  [...selIds].forEach(id=>{ if(!ids.has(id)) selIds.delete(id); });
+
+/* 各画面の上部：工程タブ＋診療科＋★＋全選択＋その工程のボタン */
+function toolbar(p, btnsHTML, note){
+  const tabs = PAGES[p].tabs.map(st=>
+    `<button data-sub="${st}" class="${sub[p]===st?'on':''}">${STAGE_LABEL[st]}<span class="n">${stageList(st).length}</span></button>`).join('');
+  const depts = [...new Set(clinics.flatMap(c=>deptTokens(c.department)))].sort();
+  const vis = curList(); const nSel = vis.filter(c=>selIds.has(c.id)).length;
+  return `
+    <div class="btns" style="margin-top:0">
+      <div class="subtabs">${tabs}</div>
+      <select class="fdept" style="width:auto;padding:5px 8px;font-size:12px"><option value="">診療科：すべて</option>${depts.map(d=>`<option${filt.dept===d?' selected':''}>${esc(d)}</option>`).join('')}</select>
+      <label class="inl"><input type="checkbox" class="fstar" ${filt.star?'checked':''} style="vertical-align:-2px"> ★だけ</label>
+    </div>
+    ${btnsHTML===null ? '' : `<div class="btns">
+      <label class="inl"><input type="checkbox" class="cball" style="vertical-align:-2px"> 表示中を全選択</label>
+      <span class="status selcount" style="margin:0">${nSel?`${nSel} 件選択中 / ${vis.length} 件`:`${vis.length} 件`}</span>
+      ${btnsHTML}
+    </div>`}
+    ${note ? `<div class="note">${note}</div>` : ''}
+    <div class="status bstat" id="bs_${p}" style="margin:4px 0 0">${esc(bmsg[p])}</div>`;
 }
-['fQ','fDept','fCh','fSt','fPr'].forEach(id=>{
-  $(id).addEventListener('input', ()=>{ pruneSel(); renderList(); });
-  $(id).addEventListener('change', ()=>{ pruneSel(); renderList(); });
-});
-function updSelCount(){
-  const vis = filtered();
-  const n = vis.filter(c=>selIds.has(c.id)).length;
-  $('selCount').textContent = n ? `${n} 件選択中 / 表示中 ${vis.length} 件` : '';
-  const all = $('cbAll');
-  all.checked = n>0 && n===vis.length;
-  all.indeterminate = n>0 && n<vis.length;
-}
-$('clist').addEventListener('click', e=>{
-  if(e.target.classList && e.target.classList.contains('cb')){
-    const id = e.target.dataset.id;
-    e.target.checked ? selIds.add(id) : selIds.delete(id);
-    updSelCount(); return;
+function bindToolbar(p){
+  const root = $('tb_'+p);
+  root.querySelectorAll('.subtabs button').forEach(b=>b.onclick=()=>{
+    sub[p] = b.dataset.sub; selIds.clear(); editId = null; hlId = null; sendIdx = 0; sendView = null;
+    if(p==='write') sel = null;
+    renderAll();
+  });
+  const fd = root.querySelector('.fdept'); if(fd) fd.onchange = ()=>{ filt.dept = fd.value; selIds.clear(); renderAll(); };
+  const fs = root.querySelector('.fstar'); if(fs) fs.onchange = ()=>{ filt.star = fs.checked; selIds.clear(); renderAll(); };
+  const ca = root.querySelector('.cball');
+  if(ca){
+    ca.onchange = ()=>{ curList().forEach(c=> ca.checked ? selIds.add(c.id) : selIds.delete(c.id)); updSelUI(p); };
+    updSelUI(p);
   }
+}
+function updSelUI(p){
+  const root = $('tb_'+p); const vis = curList(); const n = vis.filter(c=>selIds.has(c.id)).length;
+  const ca = root.querySelector('.cball'); if(ca){ ca.checked = n>0 && n===vis.length; ca.indeterminate = n>0 && n<vis.length; }
+  const sc = root.querySelector('.selcount'); if(sc) sc.textContent = n ? `${n} 件選択中 / ${vis.length} 件` : `${vis.length} 件`;
+  const body = p==='prep' ? $('prepBody') : $('clist');
+  body.querySelectorAll('input.cb').forEach(cb=>cb.checked = selIds.has(cb.dataset.id));
+}
+function toggleSel(cb, p){ cb.checked ? selIds.add(cb.dataset.id) : selIds.delete(cb.dataset.id); updSelUI(p); }
+
+/* ============ ① リスト整備 ============ */
+function renderPrep(){
+  const st = sub.prep, list = curList(), dis = busy.prep ? ' disabled' : '';
+  let btns = '';
+  if(st==='find') btns += `<button class="primary mini" data-batch="hp"${dis}>選択をHP補完</button>`;
+  if(st==='research') btns += `<button class="primary mini" data-batch="res"${dis}>選択を導線調査</button>`;
+  btns += `<button class="mini" data-batch="csvin">CSV取込</button><button class="mini" data-batch="csvout">CSV書き出し</button>`;
+  const snap = snapshotPrep();
+  $('tb_prep').innerHTML = toolbar('prep', btns, NOTE[st]);
+  bindToolbar('prep');
+  $('prepBody').innerHTML = list.length
+    ? `<div style="overflow-x:auto"><table class="ptable">
+        <tr><th style="width:28px"></th><th>院名</th><th>HP</th><th>電話</th><th>送り先</th><th style="width:1%"></th></tr>
+        ${list.map(prepRow).join('')}</table></div>`
+    : `<div class="status">この工程の院はありません。</div>`;
+  restorePrep(snap);
+}
+function prepRow(c){
+  const st = stageOf(c), f = c.research && c.research.findhp;
+  let hp;
+  if(c.hp_url){
+    hp = `<a href="${esc(c.hp_url)}" target="_blank" rel="noopener">${esc(host(c.hp_url))}</a>`;
+  }else if(st==='confirm'){
+    const ev = Array.isArray(f.evidence) ? f.evidence : [f.evidence].filter(Boolean);
+    hp = `<span class="pill ${f.confidence==='高'?'':'warn'}">候補・確度${esc(f.confidence||'低')}</span>
+      <a href="${esc(f.url)}" target="_blank" rel="noopener">${esc(host(f.url))}</a>
+      ${f.official_name && f.official_name!==c.name ? `<div class="sm">正式名称の候補：${esc(f.official_name)}</div>` : ''}
+      <div class="sm">${ev.map(esc).join(' / ')}</div>
+      <div class="btns" style="margin-top:4px"><button class="primary mini" data-act="hpok" data-id="${c.id}">採用</button><button class="mini" data-act="hpng" data-id="${c.id}">却下</button></div>`;
+  }else{
+    const gq = encodeURIComponent((c.ig_name||c.name)+' '+(c.address||'')+' 公式');
+    hp = `<div style="display:flex;gap:6px;min-width:260px"><input type="text" class="hppaste" data-id="${c.id}" placeholder="見つけたHPのURLを貼る" style="padding:4px 8px;font-size:12px"><button class="primary mini" data-act="hpsave" data-id="${c.id}">保存</button></div>
+      <div class="sm" style="margin-top:3px">
+        ${c.ig_url ? `<a href="${esc(c.ig_url)}" target="_blank" rel="noopener">Instagram</a> ・ ` : ''}<a href="https://www.google.com/search?q=${gq}" target="_blank" rel="noopener">名前で検索</a>${c.phone ? ` ・ <a href="https://www.google.com/search?q=${encodeURIComponent(c.phone)}" target="_blank" rel="noopener">電話で検索</a>` : ''}
+      </div>
+      ${f ? (()=>{ const t = f.rejected ? '候補を却下済み' : (Array.isArray(f.evidence) ? f.evidence.join(' / ') : (f.evidence||'特定できず')); return `<div class="sm clip" title="${esc(t)}">自動検索：${esc(t)}</div>`; })() : ''}`;
+  }
+  let dest;
+  if(c.email) dest = `<span class="pill">メール</span> <span class="sm">${esc(c.email)}</span>`;
+  else if(c.form_url) dest = `<span class="pill">フォーム${c.captcha?'･CAPTCHA':''}</span> <a class="sm" href="${esc(c.form_url)}" target="_blank" rel="noopener">開く</a>`;
+  else if(c.send_channel==='未対応') dest = `<span class="pill bad">窓口なし</span>`;
+  else if(c.send_channel==='取得失敗') dest = `<span class="pill bad">HPを開けない</span>`;
+  else if(c.send_channel==='要目視') dest = `<span class="pill warn">要目視</span>`;
+  else dest = `<span class="pill dim">未調査</span>`;
+  if(c.status==='NG') dest += ` <span class="pill bad">送らない</span>`;
+  const warn = c.research && Array.isArray(c.research.evidence) && c.research.evidence.find(x=>/⚠/.test(x));
+  if(warn) dest += `<div class="sm" style="color:var(--warn)">${esc(warn)}</div>`;
+  if(st==='research') dest += `<div style="margin-top:4px"><button class="mini" data-act="res1" data-id="${c.id}">調査</button></div>`;
+  let ops = `<button class="mini" data-act="edit" data-id="${c.id}">${editId===c.id?'閉じる':'編集'}</button>`;
+  if(c.status==='NG') ops += `<div style="margin-top:4px"><button class="mini" data-act="revive" data-id="${c.id}">戻す</button></div>`;
+  const stPill = sub.prep==='all' ? `<div style="margin-top:2px"><span class="pill ${st==='send'?'':(['fix','excluded'].includes(st)?'bad':'dim')}">${esc(PAGES[pageOf(st)].label.slice(0,1))} ${esc(STAGE_LABEL[st])}</span></div>` : '';
+  return `<tr data-id="${c.id}" class="${hlId===c.id?'hl':''}">
+      <td><input type="checkbox" class="cb" data-id="${c.id}" ${selIds.has(c.id)?'checked':''}></td>
+      <td class="namecol"><div class="nm">${c.priority?'★ ':''}${esc(c.name)}</div>
+        ${c.ig_name && c.ig_name!==c.name ? `<div class="sm">IG：${esc(c.ig_name)}</div>` : ''}
+        ${c.department ? `<div class="sm">${esc(c.department)}</div>` : ''}${stPill}</td>
+      <td>${hp}</td>
+      <td style="white-space:nowrap">${c.phone ? esc(c.phone) : '<span class="sm">—</span>'}</td>
+      <td>${dest}</td>
+      <td style="white-space:nowrap">${ops}</td>
+    </tr>` + (editId===c.id ? editRow(c) : '');
+}
+const EDIT_FIELDS = [['name','院名'],['hp_url','HP URL'],['phone','電話番号'],['email','メールアドレス'],['form_url','フォームURL'],
+  ['director_name','院長名'],['address','住所'],['ig_url','Instagram URL'],['department','診療科']];
+function editRow(c){
+  return `<tr class="editrow" data-edit="${c.id}"><td></td><td colspan="5">
+    <div class="egrid">${EDIT_FIELDS.map(([k,l])=>`<div><label>${l}</label><input type="text" data-f="${k}" value="${esc(c[k]||'')}"></div>`).join('')}</div>
+    <label>メモ</label><textarea data-f="notes" rows="2">${esc(c.notes||'')}</textarea>
+    <div class="btns">
+      <button class="primary mini" data-act="esave" data-id="${c.id}">保存</button>
+      <button class="mini" data-act="eclose">閉じる</button>
+      <label class="inl" style="margin-left:8px"><input type="checkbox" data-f="priority" ${c.priority?'checked':''}> ★優先</label>
+      <label class="inl" style="margin-left:8px"><input type="checkbox" data-f="ng" ${c.status==='NG'?'checked':''}> 送らない（対象外にする）</label>
+    </div>
+    <div class="sm" style="margin-top:4px">HP URLを変えると、作成済みの文面と検証結果はリセットされます（古いHPに基づくため）。</div>
+  </td></tr>`;
+}
+/* 一括処理の途中で表が描き直されても、貼りかけのURLや編集中の値を消さない */
+function snapshotPrep(){
+  const body = $('prepBody'), s = { paste:{}, edit:null, focus:null };
+  body.querySelectorAll('input.hppaste').forEach(i=>{ if(i.value) s.paste[i.dataset.id] = i.value; });
+  const er = body.querySelector('tr.editrow');
+  if(er){ s.edit = { id: er.dataset.edit, v:{} }; er.querySelectorAll('[data-f]').forEach(el=>s.edit.v[el.dataset.f] = el.type==='checkbox' ? el.checked : el.value); }
+  const a = document.activeElement;
+  if(a && body.contains(a) && a.matches('input[type=text],textarea')) s.focus = { id: a.dataset.id || (er && er.dataset.edit), f: a.dataset.f||null, cls: a.className, pos: a.selectionStart };
+  return s;
+}
+function restorePrep(s){
+  const body = $('prepBody');
+  Object.entries(s.paste).forEach(([id,v])=>{ const i = body.querySelector(`input.hppaste[data-id="${id}"]`); if(i) i.value = v; });
+  if(s.edit){ const er = body.querySelector(`tr.editrow[data-edit="${s.edit.id}"]`); if(er) er.querySelectorAll('[data-f]').forEach(el=>{ const v = s.edit.v[el.dataset.f]; if(v!==undefined){ if(el.type==='checkbox') el.checked = v; else el.value = v; } }); }
+  if(s.focus){
+    const el = s.focus.f ? body.querySelector(`tr.editrow [data-f="${s.focus.f}"]`) : body.querySelector(`input.hppaste[data-id="${s.focus.id}"]`);
+    if(el){ el.focus(); try{ el.setSelectionRange(s.focus.pos, s.focus.pos); }catch(e){} }
+  }
+}
+$('prepBody').addEventListener('change', e=>{ if(e.target.classList.contains('cb')) toggleSel(e.target, 'prep'); });
+$('prepBody').addEventListener('keydown', e=>{
+  if(e.key==='Enter' && e.target.classList.contains('hppaste')){ const b = e.target.parentElement.querySelector('[data-act="hpsave"]'); if(b) b.click(); }
+});
+$('prepBody').addEventListener('click', async e=>{
+  const b = e.target.closest('[data-act]'); if(!b) return;
+  const c = clinics.find(x=>x.id===b.dataset.id);
+  switch(b.dataset.act){
+    case 'hpok': await approveHp(c); break;
+    case 'hpng': await rejectHp(c); break;
+    case 'hpsave': {
+      const u = b.parentElement.querySelector('.hppaste').value.trim();
+      if(!/^https?:\/\//.test(u)){ toast('https:// から始まるURLを貼ってください'); return; }
+      if(await upd(c, { hp_url:u, gen:null, factcheck:null })){ delete genCache[c.id]; toast('保存しました →「送り先を調べる」へ'); renderAll(); }
+      break;
+    }
+    case 'res1': {
+      b.disabled = true; b.textContent = '調査中…';
+      try{ await researchOne(c); const ns = stageOf(c); toast(ns==='excluded' ? '窓口が見つかりませんでした（対象外へ）' : (ns==='research' ? '特定できず。「編集」から手入力できます' : '送り先が見つかりました →「② 文面・検証」へ')); renderAll(); }
+      catch(err){ toast('調査失敗: '+err.message); b.disabled = false; b.textContent = '調査'; }
+      break;
+    }
+    case 'edit': editId = (editId===c.id ? null : c.id); renderAll(); break;
+    case 'eclose': editId = null; renderAll(); break;
+    case 'esave': await saveEdit(c, b.closest('tr')); break;
+    case 'revive': if(await upd(c, { status:'未送信' })){ toast('対象外から戻しました'); renderAll(); } break;
+  }
+});
+async function saveEdit(c, tr){
+  const get = k => { const el = tr.querySelector(`[data-f="${k}"]`); return el ? (el.type==='checkbox' ? el.checked : el.value.trim()) : undefined; };
+  const patch = {};
+  EDIT_FIELDS.map(x=>x[0]).concat(['notes']).forEach(k=>{ const v = get(k); if(v!==undefined && v!==(c[k]||'')) patch[k] = v; });
+  if('name' in patch && !patch.name) delete patch.name;
+  if(get('priority') !== !!c.priority) patch.priority = get('priority');
+  if(get('ng') && c.status!=='NG') patch.status = 'NG';
+  if(!get('ng') && c.status==='NG') patch.status = '未送信';
+  if('hp_url' in patch){ patch.gen = null; patch.factcheck = null; delete genCache[c.id]; }
+  if(!Object.keys(patch).length){ editId = null; renderAll(); return; }
+  if(!(await upd(c, patch))) return;
+  editId = null;
+  const ns = stageOf(c), np = pageOf(ns);
+  toast('保存しました' + (np!=='prep' ? `（→ ${PAGES[np].label}「${STAGE_LABEL[ns]}」へ）` : (sub.prep!=='all' && ns!==sub.prep ? `（→「${STAGE_LABEL[ns]}」へ）` : '')));
+  renderAll();
+}
+async function approveHp(c){
+  const r = (c.research||{}).findhp || {};
+  if(!r.url){ toast('候補URLがありません'); return; }
+  const patch = { hp_url: r.url, research: Object.assign({}, c.research, { findhp: Object.assign({}, r, { approved:true }) }) };
+  const official = (r.official_name||'').trim();
+  if(official && official!==c.name && official.length<=40){ patch.ig_name = c.ig_name || c.name; patch.name = official; }
+  if(await upd(c, patch)){ toast('採用しました' + (patch.name ? '（名前を正式名称に更新）' : '')); renderAll(); }
+}
+async function rejectHp(c){
+  const research = Object.assign({}, c.research, { findhp: Object.assign({}, (c.research||{}).findhp, { rejected:true }) });
+  if(await upd(c, { research })){ toast('却下しました →「HPを探す」に戻ります'); renderAll(); }
+}
+
+/* ============ ② 文面・検証 ============ */
+function renderWrite(keepDetail){
+  const st = sub.write, list = curList(), dis = busy.write ? ' disabled' : '';
+  let btns = '';
+  if(st==='write')  btns = `<button class="primary mini" data-batch="gen"${dis}>選択をAI生成</button>`;
+  if(st==='verify') btns = `<button class="primary mini" data-batch="fact"${dis}>選択をファクトチェック</button>`;
+  if(st==='fix')    btns = `<button class="mini" data-batch="regen"${dis}>選択をAIで作り直す</button>`;
+  $('tb_write').innerHTML = toolbar('write', btns, NOTE[st]);
+  bindToolbar('write');
+  $('clist').innerHTML = list.map(c=>{
+    const fc = c.factcheck;
+    const badge = st==='fix' ? `<span class="pill bad">要確認${fc&&fc.counts&&fc.counts.ng ? ' '+fc.counts.ng : ''}</span>`
+               : (st==='verify' ? '<span class="pill warn">未検証</span>' : '<span class="pill dim">文面 未</span>');
+    const meta = [c.department ? esc(c.department) : '', '宛：'+(c.director_name ? esc(c.director_name)+' 先生' : '院長先生'), c.email ? 'メール' : (c.form_url ? 'フォーム' : '')].filter(Boolean).join('　');
+    return `<div class="crow${sel && sel.id===c.id ? ' sel' : ''}" data-id="${c.id}">
+      <span class="nm"><input type="checkbox" class="cb" data-id="${c.id}" ${selIds.has(c.id)?'checked':''} style="vertical-align:-2px;margin-right:6px">${c.priority?'★ ':''}${esc(c.name)}</span>
+      ${badge}
+      <span class="meta">${meta}</span>
+      ${st==='fix' && fc && fc.summary ? `<span class="meta" style="color:var(--bad)">${esc(fc.summary)}</span>` : ''}
+    </div>`;
+  }).join('') || '<div class="status">この工程の院はありません。</div>';
+  if(!keepDetail) renderDetail();
+}
+$('clist').addEventListener('change', e=>{ if(e.target.classList.contains('cb')) toggleSel(e.target, 'write'); });
+$('clist').addEventListener('click', e=>{
+  if(e.target.classList.contains('cb')) return;
   const row = e.target.closest('.crow'); if(!row) return;
   sel = clinics.find(c=>c.id===row.dataset.id);
-  renderList(); renderDetail();
+  view = (!sel.email && sel.form_url) ? 'form' : 'mail';
+  $('clist').querySelectorAll('.crow').forEach(r=>r.classList.toggle('sel', r.dataset.id===sel.id));
+  renderDetail();
 });
-$('cbAll').addEventListener('change', e=>{
-  const list = filtered();
-  if(e.target.checked) list.forEach(c=>selIds.add(c.id));
-  else list.forEach(c=>selIds.delete(c.id));
-  updSelCount(); renderList();
-});
-function selected(){ return filtered().filter(c=>selIds.has(c.id)); }
+
+function factPanel(c){
+  const f = c.factcheck; if(!f) return '';
+  const ok = f.verdict==='OK';
+  const claims = Array.isArray(f.claims) ? f.claims : [];
+  const ng = claims.filter(x=>x.verdict && x.verdict!=='裏付けあり');
+  const tone = Array.isArray(f.tone) ? f.tone : [];
+  return `<div class="alert ${ok?'ok':'bad'}">
+    <b>${ok ? '✓ ファクトチェックOK' : '⚠ 要確認'}</b>　${esc(f.summary||'')}
+    ${ng.length ? `<div style="margin-top:8px"><b>裏付けのない記述 ${ng.length}件</b>${ng.map(x=>`<div class="quote bad" style="margin-top:6px"><span class="m">✗</span><span>「${esc(x.text||'')}」<br><span style="opacity:.85">${esc(x.verdict||'')}${x.severity?'／重要度'+esc(x.severity):''}${x.evidence?'／原文: '+esc(String(x.evidence).slice(0,90)):''}</span></span></div>`).join('')}</div>` : ''}
+    ${(f.address && f.address.risk) ? `<div style="margin-top:8px"><b>宛名リスク</b>：${esc(f.address.note||'')}</div>` : ''}
+    ${(f.department && f.department.match===false) ? `<div style="margin-top:8px"><b>診療科の不一致</b>：${esc(f.department.note||'')}</div>` : ''}
+    ${tone.length ? `<div style="margin-top:8px"><b>トーン規範の違反 ${tone.length}件</b>${tone.map(t=>`<div style="margin-top:4px">・${esc(t.issue||'')}：「${esc(t.quote||'')}」</div>`).join('')}</div>` : ''}
+    ${(ok && claims.length) ? `<div class="sm" style="margin-top:6px">${claims.length}件の事実主張すべてに原文の裏付けを確認（${esc(f.model||'')}・${esc(fmtDate(f.checked_at))}）</div>` : ''}
+  </div>`;
+}
+function renderDetail(){
+  const d = $('detail');
+  if(!sel){ d.innerHTML = '<div class="status">左の一覧から院を選んでください。</div>'; return; }
+  const c = sel, g = getGen(c), r = g && g.result, st = stageOf(c);
+  d.innerHTML = `
+    <div class="dhead"><h2 class="serif">${c.priority?'★ ':''}${esc(c.name)}</h2>
+      <span class="sub">${esc(c.department||'')}　<span class="pill ${st==='send'?'':(st==='fix'?'bad':'dim')}">${esc(STAGE_LABEL[st])}</span></span></div>
+    <div class="btns">
+      ${c.hp_url ? `<a href="${esc(c.hp_url)}" target="_blank" rel="noopener"><button class="mini">HPを開く</button></a>` : ''}
+      <button class="mini" id="dToPrep">HP・送り先を直す（①へ）</button>
+      ${st==='send' ? `<button class="mini" id="dToSend">③送信で開く</button>` : ''}
+    </div>
+    ${factPanel(c)}
+    <h2 class="sec">個別化パート</h2>
+    <label>宛名（院長名。空欄なら「院長先生」）</label>
+    <input type="text" id="dDirector" value="${esc(c.director_name || (r&&r.director) || '')}">
+    <label>Why you（あなただから）</label>
+    <textarea id="dYou" rows="3">${esc(r&&r.why_you&&r.why_you.text||'')}</textarea>
+    <label>Why now（いまだから・任意）</label>
+    <textarea id="dNow" rows="2">${esc(r&&r.why_now&&r.why_now.text||'')}</textarea>
+    <label>患者ニーズ仮説（推測形で）</label>
+    <textarea id="dKa" rows="2">${esc(r&&r.kasetsu&&r.kasetsu.text||'')}</textarea>
+    <div style="margin-top:8px"><label class="inl"><input type="checkbox" id="dConcise" ${r&&r.concise?'checked':''}> 簡潔版（冒頭に断りを入れる）</label></div>
+    <div class="btns">
+      <button class="primary" id="dGen"${c.hp_url?'':' disabled'}>${r ? 'AIで作り直す' : 'AIで作成'}</button>
+      <button id="dSave"${r?'':' disabled'}>修正を保存（→ 再検証）</button>
+      <button id="dFact"${r?'':' disabled'}>ファクトチェック</button>
+      <span class="status" id="dStat" style="margin:0"></span>
+    </div>
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-top:18px">
+      <h2 class="sec" style="margin:0">原稿プレビュー</h2>
+      <div class="seg" id="dSeg"><button data-v="mail" class="${view==='mail'?'on':''}">メール版</button><button data-v="form" class="${view==='form'?'on':''}">フォーム版</button></div>
+    </div>
+    <div class="letter" id="letter">${r ? esc(previewLetter(false)) : '<span class="sm">「AIで作成」を押すと、ここに完成文面（固定文・日程調整・署名つき）が出ます。</span>'}</div>
+    <div id="kenpin" hidden>
+      <h2 class="sec">検品</h2>
+      <div class="krow"><span class="k">診療の中心</span><span id="kCore">—</span></div>
+      <div class="krow"><span class="k">Why you</span><span id="kYou">—</span></div>
+      <div class="krow"><span class="k">Why now</span><span id="kNow">—</span></div>
+      <div class="krow"><span class="k">患者ニーズ仮説</span><span id="kKa">—</span></div>
+      <div class="krow"><span class="k">引用の照合</span><span id="kQuotes">—</span></div>
+      <div id="kAlerts"></div>
+    </div>`;
+  $('dToPrep').onclick = ()=>{ filt.dept=''; filt.star=false; sub.prep='all'; editId=c.id; hlId=c.id; selIds.clear(); go('prep'); scrollToRow(c.id); };
+  if($('dToSend')) $('dToSend').onclick = ()=>jumpTo(c);
+  ['dDirector','dYou','dNow','dKa','dConcise'].forEach(id=>$(id).addEventListener('input', onDetailEdit));
+  $('dConcise').addEventListener('change', onDetailEdit);
+  $('dSeg').onclick = e=>{ const b = e.target.closest('button'); if(!b) return; view = b.dataset.v; [...$('dSeg').children].forEach(x=>x.classList.toggle('on', x===b)); onDetailEdit(); };
+  $('dGen').onclick = ()=>aiGenerate(c);
+  $('dSave').onclick = async ()=>{ if(await saveEdits(c)) renderAll(); };
+  $('dFact').onclick = ()=>runFactOne(c);
+  if(r) renderKenpin(r, g.src);
+}
+function onDetailEdit(){
+  if(!getGen(sel)) return;
+  $('letter').textContent = previewLetter(true);
+  $('dStat').textContent = isDirty() ? '未保存の変更があります（「修正を保存」で確定）' : '';
+}
+function fieldsResult(base){
+  // 編集欄の内容を採用しつつ、生成時の段・根拠（dan/basis）は引き継ぐ
+  base = base || {};
+  const slot = (b, text)=>{
+    const o = Object.assign({}, b||{}); o.text = text;
+    if(!text) o.dan = 0; else if(!o.dan) o.dan = '手';
+    if(b && b.text && b.text!==text) o.basis = (b.basis||'') + '（送信者が手直し）';
+    return o;
+  };
+  return {
+    director: $('dDirector').value.trim(),
+    concise: $('dConcise').checked,
+    why_you: slot(base.why_you, $('dYou').value.trim()),
+    why_now: slot(base.why_now, $('dNow').value.trim()),
+    kasetsu: slot(base.kasetsu, $('dKa').value.trim()),
+  };
+}
+function isDirty(){
+  const c = sel, g = getGen(c); if(!g || !$('dYou')) return false;
+  const b = g.result, t = k => ((b[k]&&b[k].text)||'');
+  return $('dYou').value.trim()!==t('why_you') || $('dNow').value.trim()!==t('why_now') || $('dKa').value.trim()!==t('kasetsu')
+    || $('dConcise').checked!==!!b.concise || $('dDirector').value.trim()!==(c.director_name||b.director||'');
+}
+function previewLetter(fromDom){
+  const g = getGen(sel); if(!g) return '';
+  const base = g.result;
+  const f = fromDom ? fieldsResult(base) : null;
+  const r = Object.assign({}, base, f||{}, { clinic: sel.name, director: f ? f.director : (sel.director_name||base.director||'') });
+  return assemble(r, view==='form', sel.department||'');
+}
+function extractQuotes(...ts){ const out = []; ts.join('\n').replace(/「([^「」]{2,})」/g, (m,q)=>{ out.push(q); return m; }); return out; }
+async function saveEdits(c, opts){
+  opts = opts || {};
+  const g = getGen(c); if(!g) return false;
+  const base = g.result, f = fieldsResult(base), t = k => ((base[k]&&base[k].text)||'');
+  const textChanged = ['why_you','why_now','kasetsu'].some(k=>t(k)!==f[k].text) || (!!base.concise)!==f.concise;
+  const dirChanged = f.director !== (c.director_name || base.director || '');
+  if(!textChanged && !dirChanged){ if(!opts.silent) toast('変更はありません'); return false; }
+  const result = Object.assign({}, base, { why_you:f.why_you, why_now:f.why_now, kasetsu:f.kasetsu, concise:f.concise });
+  if(textChanged){ result.quotes = extractQuotes(f.why_you.text, f.why_now.text, f.kasetsu.text); result.edited = true; }
+  const gen = Object.assign({}, c.gen||{}, { result, src:g.src, edited_at:new Date().toISOString() });
+  // 文面か宛名が変わったら、前の検証は無効（別の文面に対する検証を引きずらない）
+  if(!(await upd(c, { gen, director_name:f.director, factcheck:null }))) return false;
+  genCache[c.id] = { result, src:g.src };
+  if(!opts.silent) toast('保存しました →「検証する」へ');
+  return true;
+}
+async function aiGenerate(c){
+  if(getGen(c) && !confirm('作り直すと、手直しした内容は消えます。よろしいですか？')) return;
+  $('dGen').disabled = true; $('dStat').textContent = 'HPを取得して生成中…（1〜2分）';
+  try{
+    const { r, sc } = await genOne(c);
+    const bad = verifyQuotes(r.quotes, sc.text).filter(x=>!x.ok).length;
+    const retry = r.retried ? '（照合NGを検出→自動で作り直し済み）' : '';
+    renderAll();
+    if(sel && sel.id===c.id) $('dStat').innerHTML = bad ? `<b>生成完了${retry}。照合NGの引用 ${bad}件</b> — 検品欄を確認` : `<b>生成完了${retry}。</b>次は「ファクトチェック」`;
+  }catch(e){
+    if($('dStat')) $('dStat').textContent = '失敗：' + e.message;
+    if($('dGen')) $('dGen').disabled = false;
+  }
+}
+async function runFactOne(c){
+  if(isDirty()) await saveEdits(c, { silent:true });
+  $('dFact').disabled = true; $('dStat').textContent = '別モデルで検証中…（1〜2分）';
+  try{
+    const fc = await factOne(c);
+    renderAll();
+    toast(fc.verdict==='OK' ? '検証OK → ③送信 に移りました' : '要確認の指摘が出ました');
+  }catch(e){
+    if($('dStat')) $('dStat').textContent = '失敗：' + e.message;
+    if($('dFact')) $('dFact').disabled = false;
+  }
+}
+function normalize(s){ return (s||'').replace(/[\s　]/g,''); }
+function verifyQuotes(quotes, src){ const hay = normalize(src); return (quotes||[]).map(q=>({ q, ok: q && hay.includes(normalize(q)) })); }
+function danLabel(slot){
+  if(!slot) return '—';
+  if(!slot.dan) return `<span class="dan">省略</span>${esc(slot.basis||'')}`;
+  return `<span class="dan">段${esc(slot.dan)}</span>${esc(slot.basis||'')}`;
+}
+function renderKenpin(r, src){
+  $('kenpin').hidden = false;
+  $('kCore').textContent = r.core || '—';
+  $('kYou').innerHTML = danLabel(r.why_you);
+  $('kNow').innerHTML = danLabel(r.why_now);
+  $('kKa').innerHTML = danLabel(r.kasetsu);
+  const checks = verifyQuotes(r.quotes, src||'');
+  $('kQuotes').innerHTML = !checks.length ? '引用なし'
+    : checks.map(c=>`<div class="quote${c.ok?'':' bad'}"><span class="m">${c.ok?'✓':'✗'}</span><span>「${esc(c.q)}」${c.ok?'　原文と一致':'　<b>取得した本文に見つかりません — 必ず確認</b>'}</span></div>`).join('');
+  const alerts = [];
+  if(checks.some(c=>!c.ok)) alerts.push(['bad','原文と一致しない引用があります。直すか引用を外してください。']);
+  (r.cautions||[]).forEach(c=>alerts.push(['warn',c]));
+  $('kAlerts').innerHTML = alerts.map(([k,m])=>`<div class="alert ${k}">${esc(m)}</div>`).join('');
+}
 
 /* ============ 文面の組み立て（固定文は定数から。一字も揺らさない） ============ */
 function mediaBlock(dept){
@@ -444,307 +838,171 @@ function mediaBlock(dept){
 function assemble(r, form, dept){
   const F = CONST;
   const to = (r.director||'').trim() ? r.director.trim()+' 先生' : '院長先生';
-  const youT=(r.why_you&&r.why_you.text||'').trim(), nowT=(r.why_now&&r.why_now.text||'').trim(), kaT=(r.kasetsu&&r.kasetsu.text||'').trim();
+  const youT = (r.why_you&&r.why_you.text||'').trim(), nowT = (r.why_now&&r.why_now.text||'').trim(), kaT = (r.kasetsu&&r.kasetsu.text||'').trim();
   const p4 = kaT ? (kaT + (F.interview||'')) : (F.interviewSolo||'');
   const timerex = F.timerex_url ? '\n\n▼日程調整\n'+F.timerex_url : '';
   if(form){
-    return [ (r.clinic||'')+'\n'+to,
-      (F.greeting||'')+(r.concise?(F.concise||''):''),
-      [youT,nowT].filter(Boolean).join(''),
-      p4, mediaBlock(dept)+'\n'+(F.burden||''), (F.ask||'')+timerex, F.sign||''
-    ].filter(Boolean).join('\n\n');
+    return [ (r.clinic||'')+'\n'+to, (F.greeting||'')+(r.concise?(F.concise||''):''), [youT,nowT].filter(Boolean).join(''),
+      p4, mediaBlock(dept)+'\n'+(F.burden||''), (F.ask||'')+timerex, F.sign||'' ].filter(Boolean).join('\n\n');
   }
-  return [ (r.clinic||'')+'\n'+to,
-    (F.greeting||'')+(r.concise?(F.concise||''):''),
-    youT||null, nowT||null, p4, mediaBlock(dept), F.burden||'', (F.ask||'')+timerex, F.sign||''
-  ].filter(Boolean).join('\n\n');
+  return [ (r.clinic||'')+'\n'+to, (F.greeting||'')+(r.concise?(F.concise||''):''),
+    youT||null, nowT||null, p4, mediaBlock(dept), F.burden||'', (F.ask||'')+timerex, F.sign||'' ].filter(Boolean).join('\n\n');
 }
-function normalize(s){ return (s||'').replace(/[\s　]/g,''); }
-function verifyQuotes(quotes, src){ const hay=normalize(src); return (quotes||[]).map(q=>({q, ok: q && hay.includes(normalize(q))})); }
-function danLabel(slot){
-  if(!slot) return '—';
-  if(!slot.dan) return `<span class="dan">省略</span>${esc(slot.basis||'')}`;
-  return `<span class="dan">段${slot.dan}</span>${esc(slot.basis||'')}`;
+function letterFor(c, form){
+  const g = getGen(c); if(!g) return '';
+  return assemble(Object.assign({}, g.result, { clinic:c.name, director:c.director_name || g.result.director || '' }), form, c.department||'');
 }
 
-/* ============ 詳細画面 ============ */
-function fieldsResult(base){
-  // 編集欄の内容を採用しつつ、生成時の段・根拠（dan/basis）は引き継ぐ（検品表示が「省略」に化けるのを防ぐ）
-  base = base || {};
-  const slot = (b, text) => {
-    const o = Object.assign({}, b||{});
-    o.text = text;
-    if(!text) o.dan = 0;
-    else if(!o.dan) o.dan = '手';   // 生成物になく手書きで足した場合
-    if(b && b.text && b.text !== text) o.basis = (o.basis||'') + '（送信者が手直し）';
-    return o;
-  };
-  return {
-    clinic: sel.name,
-    director: $('dDirector') ? $('dDirector').value.trim() : (sel.director_name||''),
-    concise: $('dConcise') ? $('dConcise').checked : false,
-    why_you: slot(base.why_you, $('dYou').value.trim()),
-    why_now: slot(base.why_now, $('dNow').value.trim()),
-    kasetsu: slot(base.kasetsu, $('dKa').value.trim()),
-  };
+/* ============ ③ 送信 ============ */
+function renderSend(){
+  const st = sub.send, list = curList();
+  const t0 = new Date(); t0.setHours(0,0,0,0);
+  const todayN = sendLogs.filter(l=>new Date(l.sent_at)>=t0).length;
+  const now = new Date(), hm = now.getHours()*60+now.getMinutes();
+  const inWin = (hm>=600 && hm<720) || (hm>=780 && hm<900);
+  const note = st==='send'
+    ? `今日の送信 <b>${todayN}</b> / 30件　<span class="win ${inWin?'ok':'ng'}">${inWin ? 'いまは送信OKの時間帯' : '送信は10–12時／13–15時がおすすめ'}</span>${todayN>=30 ? '　<span class="pill bad">本日の上限に達しました</span>' : ''}`
+    : NOTE[st];
+  $('tb_send').innerHTML = toolbar('send', null, note);
+  bindToolbar('send');
+  if(st==='send') renderQueue(list, todayN); else renderSentTable(list, st);
 }
-function chipTpl(kind, v){
-  v = v.replace(/\s+/g,' ').trim();
-  switch(kind){
-    case 'コンセプト': return `貴院のウェブサイトで「${v}」と書かれているのを拝見し、その背景にあるお考えをぜひお伺いしたいと思いました。`;
-    case '専門・資格': return `${v}としてのご経験をふまえた診療について、ぜひお伺いしたいと思いました。`;
-    case '経歴': return `${v}というご経歴を拝見し、現在の診療に至るお考えをぜひお伺いしたいと思いました。`;
-    case '発信': return `${v}での発信を拝見し、患者さんに向けて言葉を届けようとされている姿勢が、記事という形とも重なるように思いました。`;
-    case '新着': return `${v}と拝見し、このタイミングでお話を伺えればと思いました。`;
-    default: return v;
-  }
-}
-function getGen(c){
-  // 生成結果：このブラウザで生成した直近のもの → 無ければDBに保存された共有結果
-  return genCache[c.id] || (c.gen && c.gen.result ? {result:c.gen.result, src:c.gen.src||''} : null);
-}
-function renderDetail(){
-  if(!sel){ $('detail').innerHTML = '<div class="status">左のリストからクリニックを選んでください。</div>'; return; }
-  const c = sel, g = getGen(c);
-  const ctm = c.ctm || {};
-  const youChips = ['コンセプト','専門・資格','経歴','発信'].filter(k=>ctm[k]);
-  const nowRaw = ['新着','拡大シグナル'].filter(k=>ctm[k]);
-  // 問い合わせ先はフォームURL/メールが確定しているときだけ。HPトップへのフォールバックは誤解のもと（予約ページ等に飛ぶ）なのでしない
-  const contact = c.form_url || (c.email?'mailto:'+c.email:null);
-  $('detail').innerHTML = `
-    <div class="dhead">
-      <h2 class="serif">${c.priority?'★ ':''}${esc(c.name)}</h2>
-      <span class="sub">${esc(c.department||'')}／${esc(c.send_channel||'—')}${c.captcha?'（CAPTCHAあり）':''}</span>
+function renderQueue(list, todayN){
+  const b = $('sendBody');
+  if(!list.length){ b.innerHTML = '<div class="status">送れる院はありません。② でファクトチェックOKになった院がここに並びます。</div>'; return; }
+  if(sendIdx >= list.length) sendIdx = list.length-1;
+  if(sendIdx < 0) sendIdx = 0;
+  const c = list[sendIdx], fc = c.factcheck;
+  const form = sendView ? sendView==='form' : (!c.email && !!c.form_url);
+  const letter = letterFor(c, form);
+  b.innerHTML = `<div class="queue">
+    <div class="qhead">
+      <div><button class="mini" id="qPrev"${sendIdx===0?' disabled':''}>← 前</button>
+        <span style="margin:0 10px;font-size:13px"><b>${sendIdx+1}</b> / ${list.length} 件目</span>
+        <button class="mini" id="qNext"${sendIdx>=list.length-1?' disabled':''}>次 →</button></div>
+      <div class="seg" id="qSeg"><button data-v="mail" class="${!form?'on':''}">メール版</button><button data-v="form" class="${form?'on':''}">フォーム版</button></div>
     </div>
-    <div class="btns">
-      ${c.hp_url?`<a href="${esc(c.hp_url)}" target="_blank" rel="noopener"><button class="mini">HPを開く</button></a>`:''}
-      ${contact?`<a href="${esc(contact)}" target="_blank" rel="noopener"><button class="mini">問い合わせ先を開く${c.captcha?'（CAPTCHA）':''}</button></a>`:(c.hp_url?`<span class="pill dim" title="「導線を調査」でフォーム/メールを特定してください">問い合わせ先 未調査</span>`:'')}
-      <select id="dStatus" style="width:auto;padding:4px 8px;font-size:12px">
-        ${['未送信','送信済','返信あり','アポ','辞退','NG'].map(s=>`<option${c.status===s?' selected':''}>${s}</option>`).join('')}
-      </select>
-      <button class="mini" id="dStar">${c.priority?'★解除':'★付与'}</button>
-      <button class="mini" id="dResearch"${c.hp_url?'':' disabled title="HP URLなし"'}>導線を調査</button>
-    </div>
-    ${(()=>{
-      // HPが無い院：自分で探して貼るためのミニパネル（IG・Google・電話番号検索を1クリックで開く）
-      if(c.hp_url) return '';
-      const f = c.research && c.research.findhp;
-      if(f && f.url && !f.rejected) return '';
-      const gq = encodeURIComponent((c.ig_name||c.name)+' '+(c.address||'')+' 公式');
-      const tq = c.phone ? encodeURIComponent(c.phone) : '';
-      return `<div class="alert warn"><b>HP未特定 — ご自分で探して貼ってください</b>
-        ${f ? `<br><span style="font-size:11.5px">自動探索の結果: ${esc(Array.isArray(f.evidence)?f.evidence.join(' / '):(f.evidence||'特定できず'))}</span>`:''}
-        <div class="btns" style="margin-top:8px">
-          ${c.ig_url?`<a href="${esc(c.ig_url)}" target="_blank" rel="noopener"><button class="mini">Instagramを開く（プロフィールにHPリンクあり）</button></a>`:''}
-          <a href="https://www.google.com/search?q=${gq}" target="_blank" rel="noopener"><button class="mini">Googleで名前検索</button></a>
-          ${tq?`<a href="https://www.google.com/search?q=${tq}" target="_blank" rel="noopener"><button class="mini">電話番号で検索（${esc(c.phone)}）</button></a>`:''}
-        </div>
-        <div style="display:flex;gap:8px;margin-top:8px">
-          <input type="text" id="dHpPaste" placeholder="見つけたHPのURLをここに貼る" style="flex:1">
-          <button class="primary mini" id="dHpPasteSave">保存</button>
-        </div></div>`;
-    })()}
-    ${(()=>{
-      const f = c.research && c.research.findhp;
-      if(!f || !f.url || c.hp_url || f.rejected) return '';
-      const ev = Array.isArray(f.evidence) ? f.evidence : [f.evidence].filter(Boolean);
-      return `<div class="alert ${f.confidence==='高'?'':'warn'}" style="background:var(--accent-weak);color:var(--ink)">
-        <b>HP候補（確度: ${esc(f.confidence||'低')}）</b>${f.official_name?`　正式名称候補: ${esc(f.official_name)}`:''}<br>
-        <a href="${esc(f.url)}" target="_blank" rel="noopener">${esc(f.url)}</a><br>
-        ${ev.map(esc).join('<br>')}
-        <div class="btns" style="margin-top:8px">
-          <button class="primary mini" id="dHpOk">採用する${f.official_name && f.official_name!==c.name?'（名前も正式名称に更新）':''}</button>
-          <button class="mini" id="dHpNg">却下</button>
-        </div></div>`;
-    })()}
-    ${c.research && Array.isArray(c.research.evidence) && c.research.evidence.length ? `<div class="alert ${c.research.evidence.some(x=>/⚠/.test(x))?'warn':''}" style="background:var(--accent-weak);color:var(--ink)"><b>導線調査（${(c.research.checked_at||'').slice(0,10)}）</b><br>${c.research.evidence.map(esc).join('<br>')}</div>`:''}
-    ${c.send_channel==='未対応' ? `<div class="alert warn">このチャネルでは送れません → IG DM／テレアポ行き</div>`:''}
-    ${c.hp_excerpt?`<h2 class="sec">HP抜粋（Why you の材料）</h2><div class="excerpt">${esc(c.hp_excerpt)}</div>`:''}
-
-    <h2 class="sec">材料チップ（押すと下書きが入る。原文確認は必須）</h2>
-    <div class="chips">
-      ${youChips.map(k=>`<span class="chip" data-slot="you" data-k="${esc(k)}" data-v="${esc(ctm[k])}" title="${esc(ctm[k])}"><span class="k">${esc(k)}</span>${esc(ctm[k]).slice(0,42)}</span>`).join('')}
-      ${nowRaw.map(k=>{
-        const ng = /求人|採用/.test(ctm[k]);
-        return `<span class="chip${ng?' ng':''}" ${ng?'':`data-slot="now" data-k="新着" data-v="${esc(ctm[k])}"`} title="${esc(ctm[k])}"><span class="k">${esc(k)}${ng?'（求人はWhy now禁止）':''}</span>${esc(ctm[k]).slice(0,42)}</span>`;
-      }).join('')}
-      ${(!youChips.length && !nowRaw.length)?'<span class="status">CTM材料なし — AI取得を試すか、汎用文で送る</span>':''}
-    </div>
-
-    <h2 class="sec">個別化パート</h2>
-    <label>宛名（院長名。空欄なら「院長先生」）</label>
-    <input type="text" id="dDirector" value="${esc(c.director_name || (g&&g.result&&g.result.director) || '')}">
-    <label>Why you（あなただから）</label>
-    <textarea id="dYou" rows="3">${esc(g&&g.result&&g.result.why_you&&g.result.why_you.text||'')}</textarea>
-    <label>Why now（いまだから・任意。不自然なら空欄でよい）</label>
-    <textarea id="dNow" rows="2">${esc(g&&g.result&&g.result.why_now&&g.result.why_now.text||'')}</textarea>
-    <label>患者ニーズ仮説（読者の迷い・推測形で）</label>
-    <textarea id="dKa" rows="2">${esc(g&&g.result&&g.result.kasetsu&&g.result.kasetsu.text||'')}</textarea>
-    <div style="margin-top:8px;font-size:12.5px"><label style="display:inline;margin:0"><input type="checkbox" id="dConcise" style="vertical-align:-2px" ${g&&g.result&&g.result.concise?'checked':''}> 簡潔版（冒頭に断りを入れる）</label></div>
-    <div class="btns">
-      <button class="primary" id="dGen"${c.hp_url?'':' disabled title="HP URLなし"'}>AIで作成（HP取得→生成→検品）</button>
-      <button id="dAsm">文面に組み立てる</button>
-      <span class="status" id="dStat"></span>
-    </div>
-
-    <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-top:18px">
-      <h2 class="sec" style="margin:0">原稿</h2>
-      <div style="display:flex;gap:8px;align-items:center">
-        <div class="seg" id="dSeg">
-          <button data-v="mail"${view==='mail'?' class="on"':''}>メール版</button>
-          <button data-v="form"${view==='form'?' class="on"':''}>フォーム版</button>
-        </div>
-        <button class="mini" id="dCopy">本文をコピー</button>
-        <button class="mini" id="dSubj">件名をコピー</button>
-        ${c.email?`<button class="mini" id="dGmail">Gmailで下書き</button>`:''}
+    <div class="qcard">
+      <div class="dhead"><h2 class="serif">${c.priority?'★ ':''}${esc(c.name)}</h2><span class="sub">${esc(c.department||'')}</span></div>
+      <div class="sm" style="margin:6px 0 10px">宛名：<b>${esc(c.director_name ? c.director_name+' 先生' : '院長先生')}</b>　送り先：${c.email ? 'メール '+esc(c.email) : ''}${c.email && c.form_url ? ' ／ ' : ''}${c.form_url ? 'フォーム'+(c.captcha?'（CAPTCHAあり）':'') : ''}
+        ${fc ? `<br><span class="pill">検証✓</span> ${esc(fc.summary||'')}` : ''}</div>
+      ${form ? '' : `<div class="sm" style="margin-bottom:6px">件名：${esc(CONST.subject||'')}　<button class="mini" id="qSubj">件名をコピー</button></div>`}
+      <div class="letter">${esc(letter)}</div>
+      <div class="btns" style="margin-top:14px">
+        ${c.email && !form ? `<button class="primary bigbtn" id="qGmail">Gmailで下書きを開く</button>` : ''}
+        ${c.form_url && form ? `<a href="${esc(c.form_url)}" target="_blank" rel="noopener"><button class="primary bigbtn">問い合わせフォームを開く</button></a>` : ''}
+        <button class="bigbtn" id="qCopy">本文をコピー</button>
       </div>
-    </div>
-    <div class="sheet"><textarea id="letter" spellcheck="false" placeholder="「AIで作成」か「文面に組み立てる」でここに完成文面が入ります。手直しもこの欄で。"></textarea></div>
+      <div class="btns" style="margin-top:14px;padding-top:12px;border-top:1px solid var(--line)">
+        <button class="primary bigbtn" id="qSent">送信した → 記録して次へ</button>
+        <span style="flex:1"></span>
+        <button class="mini" id="qBack">文面を直す（②へ）</button>
+        <button class="mini" id="qNg">送らない</button>
+      </div>
+    </div></div>`;
+  $('qPrev').onclick = ()=>{ sendIdx--; sendView = null; renderAll(); };
+  $('qNext').onclick = ()=>{ sendIdx++; sendView = null; renderAll(); };
+  $('qSeg').onclick = e=>{ const x = e.target.closest('button'); if(!x) return; sendView = x.dataset.v; renderAll(); };
+  if($('qSubj')) $('qSubj').onclick = async ()=>{ await copy(CONST.subject||''); toast('件名をコピーしました'); };
+  if($('qGmail')) $('qGmail').onclick = ()=>{
+    window.open('https://mail.google.com/mail/?view=cm&to='+encodeURIComponent(c.email)+'&su='+encodeURIComponent(CONST.subject||'')+'&body='+encodeURIComponent(letter), '_blank');
+  };
+  $('qCopy').onclick = async ()=>{ await copy(letter); toast((form?'フォーム版':'メール版')+'をコピーしました'); };
+  $('qSent').onclick = async ()=>{
+    if(todayN>=30 && !confirm('今日はすでに30件送っています。記録しますか？')) return;
+    $('qSent').disabled = true;
+    await markSent(c, form);
+  };
+  $('qBack').onclick = ()=>{ sel = c; view = form ? 'form' : 'mail'; selIds.clear(); go('write'); };
+  $('qNg').onclick = async ()=>{ if(!confirm(c.name+' には送らない（対象外にする）でよいですか？')) return; if(await upd(c, { status:'NG' })){ toast('対象外にしました'); renderAll(); } };
+}
+function renderSentTable(list, st){
+  const last = lastLogMap();
+  const rows = list.map(c=>{
+    const l = last[c.id] || {};
+    const act = st==='waiting'
+      ? `<button class="mini" data-act="r_reply" data-id="${c.id}">返信あり</button> <button class="primary mini" data-act="r_apo" data-id="${c.id}">アポ獲得</button> <button class="mini" data-act="r_no" data-id="${c.id}">断られた</button>`
+      : `<span class="pill ${c.status==='辞退'?'bad':''}">${esc(ST_LABEL[c.status]||c.status)}</span> ${l.replied_at?`<span class="sm">${esc(fmtDate(l.replied_at))}</span>`:''} <button class="mini" data-act="r_undo" data-id="${c.id}">返事待ちに戻す</button>`;
+    return `<tr data-id="${c.id}" class="${hlId===c.id?'hl':''}"><td><div class="nm">${esc(c.name)}</div><div class="sm">${esc(c.department||'')}</div></td>
+      <td style="white-space:nowrap">${l.sent_at ? esc(fmtDate(l.sent_at)) : '—'}</td><td>${esc(l.channel||'')}</td><td>${esc(l.draft_type||'')}</td><td>${act}</td></tr>`;
+  }).join('');
+  $('sendBody').innerHTML = list.length
+    ? `<div style="overflow-x:auto"><table class="ptable"><tr><th>院名</th><th>送信日</th><th>送り方</th><th>文面</th><th></th></tr>${rows}</table></div>`
+    : `<div class="status">${st==='waiting' ? '返事待ちの院はありません。' : 'まだ結果はありません。'}</div>`;
+}
+$('sendBody').addEventListener('click', async e=>{
+  const b = e.target.closest('[data-act^="r_"]'); if(!b) return;
+  const c = clinics.find(x=>x.id===b.dataset.id);
+  const map = { r_reply:['返信あり','返信'], r_apo:['アポ','アポ'], r_no:['辞退','辞退'], r_undo:['送信済',null] };
+  const [status, result] = map[b.dataset.act];
+  await markResult(c, status, result);
+});
+async function markSent(c, form){
+  const g = getGen(c); if(!g){ toast('文面がありません'); return; }
+  const r = g.result, body = letterFor(c, form);
+  const draftType = (r.why_you && r.why_you.text) ? 'CTM' : '汎用';
+  const { data:draft, error:e1 } = await sb.from('drafts').insert({
+    clinic_id:c.id, draft_type:draftType, format: form?'フォーム':'メール', subject: CONST.subject||'', body,
+    why_you:(r.why_you&&r.why_you.text)||'', why_now:(r.why_now&&r.why_now.text)||'', patient_needs:(r.kasetsu&&r.kasetsu.text)||'',
+    qa:{ core:r.core, quotes_check:verifyQuotes(r.quotes, g.src), cautions:r.cautions,
+         factcheck: c.factcheck ? { verdict:c.factcheck.verdict, counts:c.factcheck.counts, model:c.factcheck.model } : null },
+    model: r.model||null, created_by:user.id
+  }).select().single();
+  if(e1){ toast('保存失敗: '+e1.message); renderAll(); return; }
+  const { data:log, error:e2 } = await sb.from('send_log').insert({
+    clinic_id:c.id, draft_id:draft.id, channel: form?'フォーム':'メール', draft_type:draftType, created_by:user.id
+  }).select().single();
+  if(e2){ toast('送信記録の保存失敗: '+e2.message); renderAll(); return; }
+  sendLogs.unshift(log);
+  await upd(c, { status:'送信済' });
+  sendView = null;
+  toast(`記録しました（${draftType}）。次の院へ`);
+  renderAll();
+}
+async function markResult(c, status, result){
+  const l = lastLogMap()[c.id];
+  if(l){
+    const p = result ? { result, replied_at:new Date().toISOString() } : { result:'未返信', replied_at:null };
+    const { error } = await sb.from('send_log').update(p).eq('id', l.id);
+    if(!error) Object.assign(l, p);
+  }
+  if(await upd(c, { status })){ toast((ST_LABEL[status]||status)+' を記録しました'); renderAll(); }
+}
+async function copy(t){ try{ await navigator.clipboard.writeText(t); }catch(e){ const ta = document.createElement('textarea'); ta.value = t; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); ta.remove(); } }
 
-    <div class="btns" style="margin-top:10px">
-      <button id="dFact"${c.gen?'':' disabled title="先にAI生成が必要です"'}>ファクトチェック（別モデルで検証）</button>
-      <span class="status" id="dFactStat" style="margin:0">${c.factcheck?`最終検証 ${esc((c.factcheck.checked_at||'').slice(0,16).replace('T',' '))}（${esc(c.factcheck.model||'')}）`:'未検証'}</span>
-    </div>
-    ${(()=>{
-      const f = c.factcheck; if(!f) return '';
-      const ok = f.verdict==='OK';
-      const claims = Array.isArray(f.claims)?f.claims:[];
-      const ng = claims.filter(x=>x.verdict && x.verdict!=='裏付けあり');
-      const tone = Array.isArray(f.tone)?f.tone:[];
-      return `<div class="alert ${ok?'':'bad'}" style="${ok?'background:var(--accent-weak);color:var(--ink)':''}">
-        <b>${ok?'✓ ファクトチェックOK':'⚠ 要確認'}</b>　${esc(f.summary||'')}
-        ${ng.length?`<div style="margin-top:8px"><b>裏付けのない記述 ${ng.length}件</b>${ng.map(x=>`<div class="quote bad" style="margin-top:6px"><span class="m">✗</span><span>「${esc(x.text||'')}」<br><span style="opacity:.8">${esc(x.verdict||'')}${x.severity?'／重要度'+esc(x.severity):''}${x.evidence?'／原文: '+esc(String(x.evidence).slice(0,80)):''}</span></span></div>`).join('')}</div>`:''}
-        ${(f.address&&f.address.risk)?`<div style="margin-top:8px"><b>宛名リスク</b>：${esc(f.address.note||'')}</div>`:''}
-        ${(f.department&&f.department.match===false)?`<div style="margin-top:8px"><b>診療科の不一致</b>：${esc(f.department.note||'')}</div>`:''}
-        ${tone.length?`<div style="margin-top:8px"><b>トーン規範の違反 ${tone.length}件</b>${tone.map(t=>`<div style="margin-top:4px">・${esc(t.issue||'')}：「${esc(t.quote||'')}」</div>`).join('')}</div>`:''}
-        ${(ok&&claims.length)?`<div style="margin-top:6px;font-size:11.5px;opacity:.85">${claims.length}件の事実主張すべてに原文の裏付けを確認</div>`:''}
-      </div>`;
-    })()}
-
-    <div id="kenpin" hidden>
-      <h2 class="sec">検品</h2>
-      <div class="krow"><span class="k">診療の中心</span><span id="kCore">—</span></div>
-      <div class="krow"><span class="k">Why you</span><span id="kYou">—</span></div>
-      <div class="krow"><span class="k">Why now</span><span id="kNow">—</span></div>
-      <div class="krow"><span class="k">患者ニーズ仮説</span><span id="kKa">—</span></div>
-      <div class="krow"><span class="k">引用の照合</span><span id="kQuotes">—</span></div>
-      <div id="kAlerts"></div>
-    </div>
-
-    <div class="btns" style="margin-top:16px">
-      <button class="primary" id="dSent">送信済みにする（記録して次へ）</button>
-      <button id="dReply">返信あり</button>
-      <button id="dApo">アポ獲得</button>
-    </div>
-    <h2 class="sec">基本情報${(()=>{const m=rowState(c).missing;return m.length?`<span class="miss" style="margin-left:8px;font-size:11px">欠: ${m.join('・')}</span>`:'<span class="full" style="margin-left:8px;font-size:11px">欠けなし</span>';})()}</h2>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
-      <div><label style="margin-top:0">HP URL</label><input type="text" id="dHp" value="${esc(c.hp_url||'')}"></div>
-      <div><label style="margin-top:0">電話番号</label><input type="text" id="dPhone" value="${esc(c.phone||'')}" placeholder="HP特定の照合に使われます"></div>
-      <div><label style="margin-top:0">メールアドレス</label><input type="text" id="dEmail" value="${esc(c.email||'')}"></div>
-      <div><label style="margin-top:0">フォームURL</label><input type="text" id="dForm" value="${esc(c.form_url||'')}"></div>
-      <div><label style="margin-top:0">住所</label><input type="text" id="dAddr" value="${esc(c.address||'')}"></div>
-      <div><label style="margin-top:0">Instagram URL</label><input type="text" id="dIg" value="${esc(c.ig_url||'')}"></div>
-    </div>
-    <label>メモ</label>
-    <textarea id="dNotes" rows="2">${esc(c.notes||'')}</textarea>
-    <div class="btns"><button class="mini" id="dNotesSave">基本情報とメモを保存</button></div>
-    <div class="foot">送信前チェック：引用が原文と一致しているか／Why nowが不自然でないか（無理なら空欄）／経営の目・感嘆語が混ざっていないか／1日20〜30件・10-12時/13-15時。</div>
-  `;
-  bindDetail();
-  if(g && g.result){ renderKenpin(g.result, g.src); }
+/* ============ 全体検索（どの工程にいても見つけて飛ぶ） ============ */
+$('gQ').addEventListener('input', ()=>{
+  const q = $('gQ').value.trim(), box = $('gRes');
+  if(!q){ box.hidden = true; box.innerHTML = ''; return; }
+  const hits = clinics.filter(c=>(c.name||'').includes(q) || (c.ig_name||'').includes(q)).slice(0,12);
+  box.innerHTML = hits.length ? hits.map(c=>{
+    const st = stageOf(c);
+    return `<div data-id="${c.id}"><span>${esc(c.name)}</span><span class="pill ${st==='send'?'':(['fix','excluded'].includes(st)?'bad':'dim')}">${esc(PAGES[pageOf(st)].label.slice(0,1))} ${esc(STAGE_LABEL[st])}</span></div>`;
+  }).join('') : '<div style="cursor:default;color:var(--sub)">見つかりません</div>';
+  box.hidden = false;
+});
+$('gQ').addEventListener('keydown', e=>{ if(e.key==='Enter'){ const f = $('gRes').querySelector('[data-id]'); if(f) f.click(); } if(e.key==='Escape'){ $('gRes').hidden = true; } });
+$('gRes').addEventListener('click', e=>{
+  const d = e.target.closest('[data-id]'); if(!d) return;
+  const c = clinics.find(x=>x.id===d.dataset.id);
+  $('gRes').hidden = true; $('gRes').innerHTML = ''; $('gQ').value = '';
+  jumpTo(c);
+});
+document.addEventListener('click', e=>{ if(!e.target.closest('.gsearch')) $('gRes').hidden = true; });
+function jumpTo(c){
+  const st = stageOf(c), p = pageOf(st);
+  filt.dept = ''; filt.star = false; selIds.clear(); hlId = c.id; editId = null;
+  if(p==='prep') sub.prep = st;
+  if(p==='write'){ sub.write = st; sel = c; view = (!c.email && c.form_url) ? 'form' : 'mail'; }
+  if(p==='send'){ sub.send = st; if(st==='send'){ sendIdx = stageList('send').findIndex(x=>x.id===c.id); sendView = null; } }
+  go(p);
+  scrollToRow(c.id);
 }
-function bindDetail(){
-  const c = sel;
-  document.querySelectorAll('.chip[data-slot]').forEach(ch=>{
-    ch.onclick = ()=>{
-      const t = chipTpl(ch.dataset.k, ch.dataset.v);
-      const target = ch.dataset.slot==='now' ? $('dNow') : $('dYou');
-      target.value = t; toast('下書きを入れました。原文と照らして直してください');
-    };
-  });
-  $('dStatus').onchange = async e=>{ await updClinic({status:e.target.value}); };
-  $('dStar').onclick = async ()=>{ await updClinic({priority:!c.priority}); renderDetail(); };
-  const paste = $('dHpPasteSave');
-  if(paste) paste.onclick = async ()=>{
-    const u = $('dHpPaste').value.trim();
-    if(!/^https?:\/\//.test(u)){ toast('https:// から始まるURLを貼ってください'); return; }
-    await updClinic({ hp_url: u });
-    toast('HPを保存しました。続けて「導線を調査」を押してください');
-    renderDetail();
-  };
-  const hpOk = $('dHpOk'), hpNg = $('dHpNg');
-  if(hpOk) hpOk.onclick = ()=>approveHp(c);
-  if(hpNg) hpNg.onclick = ()=>rejectHp(c);
-  $('dResearch').onclick = async ()=>{
-    $('dResearch').disabled = true; $('dResearch').textContent = '調査中…';
-    try{ await researchOne(c); toast('導線調査が完了しました'); renderDetail(); buildFilters(); }
-    catch(e){ toast('調査失敗: '+e.message); $('dResearch').disabled=false; $('dResearch').textContent='導線を調査'; }
-  };
-  $('dSeg').onclick = e=>{
-    const b=e.target.closest('button'); if(!b) return;
-    view=b.dataset.v; [...$('dSeg').children].forEach(x=>x.classList.toggle('on',x===b));
-    doAssemble();
-  };
-  $('dAsm').onclick = doAssemble;
-  $('dGen').onclick = aiGenerate;
-  $('dCopy').onclick = async ()=>{ const t=$('letter').value; if(!t){toast('文面がありません');return;} await copy(t); toast(view==='mail'?'メール版をコピーしました':'フォーム版をコピーしました'); };
-  $('dSubj').onclick = async ()=>{ await copy(CONST.subject||''); toast('件名をコピーしました'); };
-  const gm = $('dGmail');
-  if(gm) gm.onclick = ()=>{
-    const u = 'https://mail.google.com/mail/?view=cm&to='+encodeURIComponent(c.email)
-      +'&su='+encodeURIComponent(CONST.subject||'')+'&body='+encodeURIComponent($('letter').value);
-    window.open(u,'_blank');
-  };
-  const fb = $('dFact');
-  if(fb) fb.onclick = async ()=>{
-    fb.disabled = true; $('dFactStat').textContent = '別モデルで検証中…（1〜2分）';
-    try{ await factOne(c); toast('検証が完了しました'); renderDetail(); renderList(); }
-    catch(e){ $('dFactStat').textContent = '失敗: '+e.message; fb.disabled = false; }
-  };
-  $('dSent').onclick = markSent;
-  $('dReply').onclick = ()=>markResult('返信あり','返信');
-  $('dApo').onclick = ()=>markResult('アポ','アポ');
-  $('dNotesSave').onclick = async ()=>{
-    await updClinic({
-      notes: $('dNotes').value,
-      hp_url: $('dHp').value.trim(), phone: $('dPhone').value.trim(),
-      email: $('dEmail').value.trim(), form_url: $('dForm').value.trim(),
-      address: $('dAddr').value.trim(), ig_url: $('dIg').value.trim(),
-    });
-    toast('保存しました'); renderDetail();
-  };
-}
-async function copy(t){ try{ await navigator.clipboard.writeText(t); }catch(e){ const ta=document.createElement('textarea'); ta.value=t; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); ta.remove(); } }
-async function updClinic(patch){
-  const { error } = await sb.from('clinics').update(patch).eq('id', sel.id);
-  if(error){ toast('保存失敗: '+error.message); return; }
-  Object.assign(sel, patch); renderList();
-}
-function doAssemble(){
-  const g = getGen(sel);
-  const base = (g && g.result) ? g.result : {};
-  const f = fieldsResult(base);
-  const r = Object.assign({}, base, f, { clinic: sel.name });
-  $('letter').value = assemble(r, view==='form', sel.department||'');
-  if(g && g.result) renderKenpin(Object.assign({},g.result,f), g.src);
-}
-function renderKenpin(r, src){
-  $('kenpin').hidden = false;
-  $('kCore').textContent = r.core || '—';
-  $('kYou').innerHTML = danLabel(r.why_you);
-  $('kNow').innerHTML = danLabel(r.why_now);
-  $('kKa').innerHTML = danLabel(r.kasetsu);
-  const checks = verifyQuotes(r.quotes, src||'');
-  const box = $('kQuotes');
-  if(!checks.length){ box.textContent = '引用なし（汎用文で構成）'; }
-  else box.innerHTML = checks.map(c=>`<div class="quote${c.ok?'':' bad'}"><span class="m">${c.ok?'✓':'✗'}</span><span>「${esc(c.q)}」${c.ok?'　原文と一致':'　<b>取得した本文に見つかりません — 送信前に必ず確認</b>'}</span></div>`).join('');
-  const alerts = [];
-  if(checks.some(c=>!c.ok)) alerts.push(['bad','原文と一致しない引用があります。該当箇所を直すか、引用を外してから送ってください。']);
-  (r.cautions||[]).forEach(c=>alerts.push(['warn',c]));
-  $('kAlerts').innerHTML = alerts.map(([k,m])=>`<div class="alert ${k}">${esc(m)}</div>`).join('');
+function scrollToRow(id){
+  setTimeout(()=>{ const el = document.querySelector(`tr[data-id="${id}"], .crow[data-id="${id}"]`); if(el) el.scrollIntoView({ block:'center' }); }, 40);
 }
 
-/* ============ AI生成（scrape → generate → 検品） ============ */
+/* ============ AI・調査（サーバーの小さなプログラム呼び出し） ============ */
 async function callFn(name, body){
   const { data:{ session } } = await sb.auth.getSession();
   const res = await fetch(SB_URL+'/functions/v1/'+name, {
@@ -752,171 +1010,34 @@ async function callFn(name, body){
     headers:{ 'Authorization':'Bearer '+session.access_token, 'apikey':SB_ANON, 'Content-Type':'application/json' },
     body: JSON.stringify(body)
   });
-  const j = await res.json().catch(()=>({error:'応答を解釈できません'}));
+  const j = await res.json().catch(()=>({ error:'応答を解釈できません' }));
   if(!res.ok) throw new Error(j.message || j.error || ('HTTP '+res.status));
   return j;
 }
 async function genOne(c){
-  // 取得→生成→DB保存（共有）。詳細画面・一括作成の両方から使う
   const sc = await callFn('scrape', { url: c.hp_url });
   const materials = Object.assign({}, c.ctm || {});
   if(c.hp_excerpt) materials['HP抜粋'] = c.hp_excerpt;
   const r = await callFn('generate', { source_text: sc.text, clinic_name: c.name, department: c.department, materials });
   genCache[c.id] = { result: r, src: sc.text };
-  const gen = { result: r, src: sc.text, at: new Date().toISOString() };
-  // 文面を作り直したら、前の検証結果は無効（古い文面に対する検証を引きずらせない）
-  const patch = { gen, factcheck: null };
-  // AIがHPから読み取った院長名は、その場でDBに保存する（宛名・リストの「欠: 院長名」に反映）
+  // 作り直したら前の検証は無効。AIが読み取った院長名はその場で保存
+  const patch = { gen:{ result:r, src:sc.text, at:new Date().toISOString() }, factcheck:null };
   const d = (r.director||'').trim();
   if(d && !c.director_name) patch.director_name = d;
   const { error } = await sb.from('clinics').update(patch).eq('id', c.id);
-  if(!error) Object.assign(c, patch);
+  if(error) throw new Error(error.message);
+  Object.assign(c, patch);
   return { r, sc };
 }
-async function aiGenerate(){
-  const c = sel;
-  $('dGen').disabled = true; $('dStat').textContent = 'HPを取得中…生成中…（30秒前後）';
-  try{
-    const { r, sc } = await genOne(c);
-    if(sel.id !== c.id) return;
-    $('dDirector').value = (r.director||'').trim() || c.director_name || '';
-    $('dYou').value = r.why_you && r.why_you.text || '';
-    $('dNow').value = r.why_now && r.why_now.text || '';
-    $('dKa').value = r.kasetsu && r.kasetsu.text || '';
-    $('dConcise').checked = !!r.concise;
-    doAssemble();
-    const bad = verifyQuotes(r.quotes, sc.text).filter(x=>!x.ok).length;
-    const retry = r.retried ? '（照合NGを検出→自動で作り直し済み）' : '';
-    $('dStat').innerHTML = bad ? `<b>生成完了${retry}。それでも照合NGの引用が ${bad} 件</b> — 検品欄を確認。` : `<b>生成完了${retry}。</b>引用は全て原文と一致。`;
-  }catch(e){
-    $('dStat').textContent = '失敗：' + e.message;
-  }finally{
-    if($('dGen')) $('dGen').disabled = false;
-  }
-}
-
-/* ============ 送信記録 ============ */
-async function markSent(){
-  const c = sel, g = getGen(c);
-  const body = $('letter').value.trim();
-  if(!body){ toast('文面が空です。先に組み立ててください'); return; }
-  const f = fieldsResult(g && g.result);
-  const draftType = f.why_you.text ? 'CTM' : '汎用';
-  const channel = view==='form' ? 'フォーム' : (c.send_channel==='フォーム'?'フォーム':'メール');
-  const { data: draft, error: e1 } = await sb.from('drafts').insert({
-    clinic_id: c.id, draft_type: draftType, format: view==='form'?'フォーム':'メール',
-    subject: CONST.subject||'', body,
-    why_you: f.why_you.text, why_now: f.why_now.text, patient_needs: f.kasetsu.text,
-    qa: g ? { core: g.result.core, quotes_check: verifyQuotes(g.result.quotes, g.src), cautions: g.result.cautions,
-              factcheck: c.factcheck ? { verdict: c.factcheck.verdict, counts: c.factcheck.counts, model: c.factcheck.model } : null } : {},
-    model: g && g.result.model || null, created_by: user.id
-  }).select().single();
-  if(e1){ toast('保存失敗: '+e1.message); return; }
-  const { error: e2 } = await sb.from('send_log').insert({
-    clinic_id: c.id, draft_id: draft.id, channel, draft_type: draftType, created_by: user.id
-  });
-  if(e2){ toast('送信記録の保存失敗: '+e2.message); return; }
-  await updClinic({ status:'送信済', director_name: f.director || c.director_name });
-  toast(`送信済みで記録しました（${draftType}）`);
-  const list = filtered(); const i = list.findIndex(x=>x.id===c.id);
-  const next = list.slice(i+1).find(x=>x.status==='未送信');
-  if(next){ sel = next; renderList(); renderDetail(); }
-}
-async function markResult(status, result){
-  const c = sel;
-  const { data: logs } = await sb.from('send_log').select('id').eq('clinic_id', c.id).order('sent_at',{ascending:false}).limit(1);
-  if(logs && logs.length){
-    await sb.from('send_log').update({ result, replied_at: new Date().toISOString() }).eq('id', logs[0].id);
-  }
-  await updClinic({ status });
-  toast(status+' を記録しました'); renderDetail();
-}
-
-/* ============ タブ ============ */
-$('tabs').onclick = async e=>{
-  const b = e.target.closest('button'); if(!b) return;
-  [...$('tabs').children].forEach(x=>x.classList.toggle('on',x===b));
-  const t = b.dataset.t;
-  $('tList').hidden = t!=='list';
-  $('tStats').hidden = t!=='stats';
-  $('tSettings').hidden = t!=='settings';
-  if(t==='stats') renderStats();
-  if(t==='settings') renderSettings();
-};
-
-/* ============ 集計 ============ */
-async function renderStats(){
-  const { data: logs, error } = await sb.from('send_log').select('*');
-  if(error){ toast(error.message); return; }
-  const sent = logs.length;
-  const replied = logs.filter(l=>['返信','アポ'].includes(l.result)).length;
-  const apo = logs.filter(l=>l.result==='アポ').length;
-  $('statCards').innerHTML = [
-    ['送信', sent],['返信', replied],['アポ', apo],
-    ['返信率', sent?Math.round(replied/sent*1000)/10+'%':'—']
-  ].map(([l,n])=>`<div class="card"><div class="n">${n}</div><div class="l">${l}</div></div>`).join('');
-  const types = ['CTM','汎用'];
-  $('statTable').innerHTML = '<tr><th>文面タイプ</th><th>送信</th><th>返信</th><th>アポ</th><th>返信率</th></tr>' +
-    types.map(t=>{
-      const g = logs.filter(l=>l.draft_type===t);
-      const r = g.filter(l=>['返信','アポ'].includes(l.result)).length;
-      return `<tr><td>${t}</td><td>${g.length}</td><td>${r}</td><td>${g.filter(l=>l.result==='アポ').length}</td><td>${g.length?Math.round(r/g.length*1000)/10+'%':'—'}</td></tr>`;
-    }).join('');
-}
-
-/* ============ 設定 ============ */
-const SET_KEYS = [
-  ['subject','件名（メール用）'],['greeting','名乗り'],['concise','簡潔版の断り'],
-  ['interview','Why interview（仮説あり時の接続文）'],['interviewSolo','Why interview（仮説なし時）'],
-  ['media','媒体の信用'],['examples_text','掲載例（1行1科：科|院名|URL。診療科が合う院にだけ差し込まれる）'],
-  ['burden','相手の負担'],['ask','打診'],['sign','署名'],['timerex_url','TimeRex URL']
-];
-function renderSettings(){
-  $('setForm').innerHTML = SET_KEYS.map(([k,l])=>`
-    <div class="setrow"><label>${l}</label><textarea data-k="${k}" rows="${(CONST[k]||'').length>60?3:1}">${esc(CONST[k]||'')}</textarea></div>`).join('');
-}
-document.addEventListener('click', async e=>{
-  if(e.target.id !== 'myPwBtn') return;
-  const pw = $('myNewPw').value;
-  if(pw.length < 8){ $('myPwStat').textContent = '8文字以上にしてください'; return; }
-  const { error } = await sb.auth.updateUser({ password: pw });
-  $('myPwStat').textContent = error ? '失敗: '+error.message : '変更しました';
-  if(!error) $('myNewPw').value='';
-});
-$('setSave').onclick = async ()=>{
-  const v = {...CONST};
-  document.querySelectorAll('#setForm textarea').forEach(t=>{ v[t.dataset.k] = t.value.trim(); });
-  const { error } = await sb.from('app_settings').update({ value: v }).eq('key','constants');
-  $('setStat').textContent = error ? '保存失敗: '+error.message : '保存しました（全員に反映されます）';
-  if(!error) CONST = v;
-};
-
-/* ============ CSV ============ */
-function parseCSV(text){
-  const rows=[]; let row=[], cur='', q=false;
-  text = text.replace(/^﻿/,'');
-  for(let i=0;i<text.length;i++){
-    const ch=text[i];
-    if(q){ if(ch==='"'){ if(text[i+1]==='"'){cur+='"';i++;} else q=false; } else cur+=ch; }
-    else if(ch==='"') q=true;
-    else if(ch===','){ row.push(cur); cur=''; }
-    else if(ch==='\n'||ch==='\r'){ if(ch==='\r'&&text[i+1]==='\n')i++; row.push(cur); rows.push(row); row=[]; cur=''; }
-    else cur+=ch;
-  }
-  if(cur!==''||row.length){ row.push(cur); rows.push(row); }
-  return rows.filter(r=>r.some(c=>c.trim()));
-}
-/* ============ 一括処理（1件ずつ独立したパイプライン・同時2件・混雑時は1回だけ再試行） ============ */
 async function factOne(c){
-  // 生成とは別モデル（kimi-k2.6）で独立検証。文面を作り直した場合は再検証が要る
+  // 生成(kimi-k3)とは別モデル(kimi-k2.6)で独立検証
   const g = getGen(c);
   if(!g || !g.result) throw new Error('先にAI生成が必要です');
   const r = g.result;
   const fc = await callFn('factcheck', {
     source_text: g.src, clinic_name: c.name, department: c.department || '',
     director: c.director_name || r.director || '',
-    why_you: (r.why_you&&r.why_you.text)||'', why_now: (r.why_now&&r.why_now.text)||'',
-    kasetsu: (r.kasetsu&&r.kasetsu.text)||'',
+    why_you: (r.why_you&&r.why_you.text)||'', why_now: (r.why_now&&r.why_now.text)||'', kasetsu: (r.kasetsu&&r.kasetsu.text)||'',
   });
   const { error } = await sb.from('clinics').update({ factcheck: fc }).eq('id', c.id);
   if(error) throw new Error(error.message);
@@ -928,64 +1049,35 @@ async function researchOne(c){
   const patch = { send_channel: r.channel, research: Object.assign({}, c.research||{}, r), captcha: !!r.captcha };
   if(r.email) patch.email = r.email;
   if(r.form_url) patch.form_url = r.form_url;
-  // 名前が未取得プレースホルダのままなら、HPタイトルから正式名称を入れる
-  if(r.title && /^（名称未取得）/.test(c.name||'')){
-    patch.name = r.title.split(/[|｜]/)[0].trim() || c.name;
-  }
+  if(r.title && /^（名称未取得）/.test(c.name||'')) patch.name = r.title.split(/[|｜]/)[0].trim() || c.name;
   const { error } = await sb.from('clinics').update(patch).eq('id', c.id);
   if(error) throw new Error(error.message);
   Object.assign(c, patch);
 }
 async function hpOne(c){
-  // リスト補完型：照合が通れば自動でHP URL・正式名称を確定。⚠付きだけ承認待ちに残す（2026-09-09 実測12件で誤特定0を確認して解禁）
+  // 照合が通れば自動でHP URL・正式名称を確定。確証がなければ「HPを確認」へ
   const r = await callFn('findhp', { name: c.ig_name || c.name, address: c.address || '', phone: c.phone || '', ig_url: c.ig_url || '' });
   const ev = Array.isArray(r.evidence) ? r.evidence : [r.evidence].filter(Boolean);
-  const nameOk = ev.some(x=>/名前の照合OK/.test(x));
-  const hasWarn = ev.some(x=>/⚠/.test(x));
-  const auto = r.url && !hasWarn && (r.verified || nameOk);
-  const patch = { research: Object.assign({}, c.research||{}, { findhp: Object.assign({}, r, auto?{auto_adopted:true}:{}) }) };
+  const auto = r.url && !ev.some(x=>/⚠/.test(x)) && (r.verified || ev.some(x=>/名前の照合OK/.test(x)));
+  const patch = { research: Object.assign({}, c.research||{}, { findhp: Object.assign({}, r, auto ? { auto_adopted:true } : {}) }) };
   if(auto){
     patch.hp_url = r.url;
     const official = (r.official_name||'').trim();
-    if(official && official !== c.name && official.length <= 40){
-      patch.ig_name = c.ig_name || c.name;
-      patch.name = official;
-    }
+    if(official && official!==c.name && official.length<=40){ patch.ig_name = c.ig_name || c.name; patch.name = official; }
   }
   const { error } = await sb.from('clinics').update(patch).eq('id', c.id);
   if(error) throw new Error(error.message);
   Object.assign(c, patch);
 }
-async function approveHp(c){
-  const r = (c.research||{}).findhp || {};
-  if(!r.url){ toast('候補URLがありません'); return; }
-  const patch = { hp_url: r.url };
-  const official = (r.official_name||'').trim();
-  if(official && official !== c.name && official.length <= 40){
-    patch.ig_name = c.ig_name || c.name;
-    patch.name = official;
-  }
-  patch.research = Object.assign({}, c.research, { findhp: Object.assign({}, r, { approved: true }) });
-  const { error } = await sb.from('clinics').update(patch).eq('id', c.id);
-  if(error){ toast('保存失敗: '+error.message); return; }
-  Object.assign(c, patch);
-  toast('採用しました' + (patch.name ? '（名前を正式名称に更新）' : ''));
-  renderList(); renderDetail();
-}
-async function rejectHp(c){
-  const research = Object.assign({}, c.research, { findhp: Object.assign({}, (c.research||{}).findhp, { rejected: true }) });
-  const { error } = await sb.from('clinics').update({ research }).eq('id', c.id);
-  if(error){ toast('保存失敗: '+error.message); return; }
-  c.research = research;
-  toast('却下しました（候補は残ります）'); renderList(); renderDetail();
-}
-async function runBatch(btn, items, fn, label, doneMsg){
-  if(!items.length){ $('batchStat').textContent = '対象なし（チェックを入れた院の中に処理できるものがありません）'; return; }
-  btn.disabled = true;
-  let done = 0, ng = 0; const errs = [];
-  const upd = ()=>{ $('batchStat').textContent = `${label}中… ${done+ng} / ${items.length}（失敗 ${ng}）`; };
-  upd();
-  let next = 0;
+
+/* ============ 一括処理（1件ずつ独立・同時2件・混雑時は1回だけ再試行） ============ */
+async function runBatch(p, label, items, fn, doneMsg){
+  const setMsg = m=>{ bmsg[p] = m; const el = $('bs_'+p); if(el) el.textContent = m; };
+  if(!items.length){ setMsg('対象なし（チェックを入れた院の中に処理できるものがありません）'); return; }
+  busy[p] = true; renderAll({ keepDetail:true });
+  let done = 0, ng = 0, next = 0; const errs = [];
+  const tick = ()=>setMsg(`${label}中… ${done+ng} / ${items.length}（失敗 ${ng}）`);
+  tick();
   async function worker(){
     while(next < items.length){
       const c = items[next++];
@@ -994,81 +1086,138 @@ async function runBatch(btn, items, fn, label, doneMsg){
         if(/429|混み合|rate/i.test(e.message||'')){
           await new Promise(r=>setTimeout(r, 25000));
           try{ await fn(c); done++; }catch(e2){ ng++; errs.push(c.name+': '+e2.message); }
-        } else { ng++; errs.push(c.name+': '+e.message); }
+        }else{ ng++; errs.push(c.name+': '+e.message); }
       }
-      upd(); renderList();
+      tick(); renderAll({ keepDetail:true });
     }
   }
   await Promise.all([worker(), worker()]);
-  $('batchStat').textContent = `${label}完了 ${done}件／失敗 ${ng}件。${doneMsg||''}` + (errs.length?`（詳細は最初の失敗: ${errs[0]}）`:'');
+  busy[p] = false; items.forEach(c=>selIds.delete(c.id));
+  setMsg(`${label}完了 ${done}件／失敗 ${ng}件。${doneMsg||''}` + (errs.length ? `（最初の失敗: ${errs[0]}）` : ''));
   if(errs.length) console.warn(label+'の失敗:', errs);
-  buildFilters();
-  btn.disabled = false;
+  renderAll({ keepDetail: !(sel && items.includes(sel)) });
 }
-$('aiBatch').onclick = ()=>runBatch($('aiBatch'), selected().filter(c=>c.hp_url), genOne, 'AI生成', '「文面✓」の院を開いて検品→送信してください。');
-$('factBatch').onclick = ()=>runBatch($('factBatch'), selected().filter(c=>!!getGen(c)), factOne, 'ファクトチェック', '「検証✓」は裏付けOK。「要確認」の院は開いて指摘を確認してください。');
-$('resBatch').onclick = ()=>runBatch($('resBatch'), selected().filter(c=>c.hp_url), researchOne, '導線調査', '送信手段が4分類に更新されました。');
-$('hpBatch').onclick = ()=>runBatch($('hpBatch'), selected().filter(c=>!c.hp_url), hpOne, 'HP補完', '照合OKは自動確定済み。「HP候補（承認待ち）」フィルタに残った⚠だけ目視で採用／却下してください。');
+['prep','write','send'].forEach(p=>{
+  $('tb_'+p).addEventListener('click', e=>{
+    const b = e.target.closest('[data-batch]'); if(!b || b.disabled) return;
+    const k = b.dataset.batch, S = selectedIn();
+    if(k==='hp')    runBatch(p, 'HP補完', S.filter(c=>!c.hp_url), hpOne, '確実なものは自動で確定。確証がない院は「HPを確認」に移りました。');
+    if(k==='res')   runBatch(p, '導線調査', S.filter(c=>c.hp_url), researchOne, '送り先が見つかった院は「② 文面・検証」へ移りました。');
+    if(k==='gen')   runBatch(p, 'AI生成', S.filter(c=>c.hp_url), genOne, '次は「検証する」タブでファクトチェック。');
+    if(k==='regen'){ if(S.length && confirm(S.length+'件を作り直します。手直しした内容は消えます。よろしいですか？')) runBatch(p, 'AI作り直し', S.filter(c=>c.hp_url), genOne, '次は「検証する」タブでファクトチェック。'); }
+    if(k==='fact')  runBatch(p, 'ファクトチェック', S.filter(c=>!!getGen(c)), factOne, 'OKの院は「③ 送信」へ。要確認は「直す」タブへ移りました。');
+    if(k==='csvin') $('csvFile').click();
+    if(k==='csvout') exportCSV();
+  });
+});
 
-$('csvIn').onclick = ()=>$('csvFile').click();
+/* ============ CSV ============ */
+function parseCSV(text){
+  const rows = []; let row = [], cur = '', q = false;
+  text = text.replace(/^﻿/,'');
+  for(let i=0;i<text.length;i++){
+    const ch = text[i];
+    if(q){ if(ch==='"'){ if(text[i+1]==='"'){ cur+='"'; i++; } else q = false; } else cur += ch; }
+    else if(ch==='"') q = true;
+    else if(ch===','){ row.push(cur); cur=''; }
+    else if(ch==='\n'||ch==='\r'){ if(ch==='\r'&&text[i+1]==='\n') i++; row.push(cur); rows.push(row); row=[]; cur=''; }
+    else cur += ch;
+  }
+  if(cur!=='' || row.length){ row.push(cur); rows.push(row); }
+  return rows.filter(r=>r.some(c=>c.trim()));
+}
 $('csvFile').onchange = async e=>{
   const file = e.target.files[0]; if(!file) return;
+  e.target.value = '';
   const rows = parseCSV(await file.text());
   const head = rows[0].map(h=>h.trim());
   const findCol = names => { for(const n of names){ const i = head.indexOf(n); if(i>=0) return i; } return -1; };
-  // クリニック名 or HP URL のどちらかがあれば取り込める（足りない側は「HP補完」「導線調査」で埋める）
+  // クリニック名 or HP URL のどちらかがあれば取り込める（足りない側は ① の工程で埋める）
   const iName = findCol(['クリニック名','名前','医院名','施設名','クリニック','院名','Instagram名','IG名','アカウント名']);
   const iUrl  = findCol(['HP URL','HP','URL','ホームページ','ホームページURL','サイト','WEBサイト']);
   if(iName<0 && iUrl<0){ toast('「クリニック名」または「HP URL」の列が必要です'); return; }
   const iDept = findCol(['診療科','科目','診療科目']);
   const iPhone = findCol(['電話','電話番号','TEL','Tel','tel']);
   const iAddr = findCol(['住所','所在地','エリア','地域','市区町村']);
-  const iIg = findCol(['Instagram URL','インスタURL','IG URL','Instagram','インスタ','アカウントURL']);
+  const iIg = findCol(['Instagram URL','インスタURL','IG URL','Instagram','インスタ','インスタグラム','アカウントURL']);
   const idx = n => head.indexOf(n);
   const existingNames = new Set(clinics.map(c=>c.name));
   const existingUrls = new Set(clinics.map(c=>(c.hp_url||'').replace(/\/$/,'')).filter(Boolean));
   const CTM_KEYS = ['コンセプト','専門・資格','経歴','発信','新着','拡大シグナル'];
-  const hostName = u => { try{ return new URL(u).hostname; }catch(e){ return ''; } };
   const recs = rows.slice(1).map(r=>{
     const g = n => idx(n)>=0 ? (r[idx(n)]||'').trim() : '';
-    const name = iName>=0 ? (r[iName]||'').trim() : '';
-    const url = iUrl>=0 ? (r[iUrl]||'').trim() : '';
-    const ctm = {}; CTM_KEYS.forEach(k=>{ if(g(k)) ctm[k]=g(k); });
-    return { name: name || (url ? '（名称未取得）'+hostName(url) : ''),
-      department: iDept>=0 ? (r[iDept]||'').trim() : g('診療科'),
-      send_channel:g('送信手段'), email:g('メアド'), form_url:g('フォームURL'),
-      captcha:g('CAPTCHA')==='あり', director_name:g('院長名'),
-      phone: iPhone>=0 ? (r[iPhone]||'').trim() : '',
-      address: iAddr>=0 ? (r[iAddr]||'').trim() : '',
-      ig_url: iIg>=0 ? (r[iIg]||'').trim() : '',
+    const cell = i => i>=0 ? (r[i]||'').trim() : '';
+    const name = cell(iName), url = cell(iUrl);
+    const ctm = {}; CTM_KEYS.forEach(k=>{ if(g(k)) ctm[k] = g(k); });
+    return { name: name || (url ? '（名称未取得）'+host(url) : ''), department: cell(iDept),
+      send_channel:g('送信手段'), email:g('メアド'), form_url:g('フォームURL'), captcha:g('CAPTCHA')==='あり', director_name:g('院長名'),
+      phone:cell(iPhone), address:cell(iAddr), ig_url:cell(iIg),
       hp_url:url, hp_excerpt:g('HP抜粋').slice(0,2000), ctm, status:g('状況')||'未送信' };
-  }).filter(r=>(r.name||r.hp_url))
+  }).filter(r=>r.name || r.hp_url)
     .filter(r=>!existingNames.has(r.name) && !(r.hp_url && existingUrls.has(r.hp_url.replace(/\/$/,''))));
   if(!recs.length){ toast('追加対象なし（全て登録済み）'); return; }
   const { error } = await sb.from('clinics').insert(recs);
   if(error){ toast('取込失敗: '+error.message); return; }
-  toast(recs.length+'件を追加しました。HP無しの院は「選択をHP補完」→「導線調査」の順で埋めてください');
   await loadAll();
+  const nf = recs.filter(r=>!r.hp_url).length;
+  sub.prep = nf ? 'find' : 'research'; selIds.clear(); go('prep');
+  toast(`${recs.length}件を追加しました（HPなし ${nf}件 →「HPを探す」）`);
 };
-$('csvOut').onclick = async ()=>{
-  const { data: logs } = await sb.from('send_log').select('*');
-  const last = {};
-  (logs||[]).forEach(l=>{ if(!last[l.clinic_id] || l.sent_at > last[l.clinic_id].sent_at) last[l.clinic_id]=l; });
-  const head = ['クリニック名','診療科','送信手段','メアド','フォームURL','CAPTCHA','院長名','HP URL','状況','送信日','文面タイプ','結果'];
+function exportCSV(){
+  const last = lastLogMap();
+  const head = ['クリニック名','IG名','診療科','工程','HP URL','電話番号','住所','メアド','フォームURL','CAPTCHA','院長名','状況','送信日','文面タイプ','結果','メモ'];
   const q = s => '"'+String(s??'').replace(/"/g,'""')+'"';
-  const lines = [head.map(q).join(',')].concat(filtered().map(c=>{
-    const l = last[c.id]||{};
-    return [c.name,c.department,c.send_channel,c.email,c.form_url,c.captcha?'あり':'',c.director_name,c.hp_url,c.status,
-      l.sent_at?l.sent_at.slice(0,10):'', l.draft_type||'', l.result||''].map(q).join(',');
+  const lines = [head.map(q).join(',')].concat(clinics.map(c=>{
+    const l = last[c.id] || {}, st = stageOf(c);
+    return [c.name, c.ig_name, c.department, PAGES[pageOf(st)].label+'／'+STAGE_LABEL[st], c.hp_url, c.phone, c.address, c.email, c.form_url, c.captcha?'あり':'',
+      c.director_name, ST_LABEL[c.status]||c.status, l.sent_at ? l.sent_at.slice(0,10) : '', l.draft_type||'', l.result||'', c.notes].map(q).join(',');
   }));
-  const blob = new Blob(['﻿'+lines.join('\n')], {type:'text/csv'});
+  const blob = new Blob(['﻿'+lines.join('\n')], { type:'text/csv' });
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob); a.download = '診ラボン送信リスト.csv'; a.click();
+}
+
+/* ============ 集計 ============ */
+async function renderStats(){
+  const order = ['find','confirm','research','write','verify','fix','send','waiting','result','excluded'];
+  $('stageCards').innerHTML = order.map(s=>`<div class="card"><div class="n">${clinics.filter(c=>stageOf(c)===s).length}</div><div class="l">${esc(STAGE_LABEL[s])}</div></div>`).join('');
+  const { data:logs, error } = await sb.from('send_log').select('*');
+  if(error){ toast(error.message); return; }
+  const sent = logs.length, replied = logs.filter(l=>['返信','アポ'].includes(l.result)).length, apo = logs.filter(l=>l.result==='アポ').length;
+  $('statCards').innerHTML = [['送信',sent],['返信',replied],['アポ',apo],['返信率', sent ? Math.round(replied/sent*1000)/10+'%' : '—']]
+    .map(([l,n])=>`<div class="card"><div class="n">${n}</div><div class="l">${l}</div></div>`).join('');
+  $('statTable').innerHTML = '<tr><th>文面タイプ</th><th>送信</th><th>返信</th><th>アポ</th><th>返信率</th></tr>' + ['CTM','汎用'].map(t=>{
+    const g = logs.filter(l=>l.draft_type===t), r = g.filter(l=>['返信','アポ'].includes(l.result)).length;
+    return `<tr><td>${t}</td><td>${g.length}</td><td>${r}</td><td>${g.filter(l=>l.result==='アポ').length}</td><td>${g.length ? Math.round(r/g.length*1000)/10+'%' : '—'}</td></tr>`;
+  }).join('');
+}
+
+/* ============ 設定 ============ */
+const SET_KEYS = [
+  ['subject','件名（メール用）'],['greeting','名乗り'],['concise','簡潔版の断り'],
+  ['interview','Why interview（仮説あり時の接続文）'],['interviewSolo','Why interview（仮説なし時）'],
+  ['media','媒体の信用'],['examples_text','掲載例（1行1科：科|院名|URL。診療科が合う院にだけ差し込まれる）'],
+  ['burden','相手の負担'],['ask','打診'],['sign','署名'],['timerex_url','TimeRex URL']
+];
+function renderSettings(){
+  $('setForm').innerHTML = SET_KEYS.map(([k,l])=>`<div><label>${l}</label><textarea data-k="${k}" rows="${(CONST[k]||'').length>60?3:1}">${esc(CONST[k]||'')}</textarea></div>`).join('');
+}
+$('myPwBtn').onclick = async ()=>{
+  const pw = $('myNewPw').value;
+  if(pw.length < 8){ $('myPwStat').textContent = '8文字以上にしてください'; return; }
+  const { error } = await sb.auth.updateUser({ password: pw });
+  $('myPwStat').textContent = error ? '失敗: '+error.message : '変更しました';
+  if(!error) $('myNewPw').value = '';
+};
+$('setSave').onclick = async ()=>{
+  const v = { ...CONST };
+  document.querySelectorAll('#setForm textarea').forEach(t=>{ v[t.dataset.k] = t.value.trim(); });
+  const { error } = await sb.from('app_settings').update({ value: v }).eq('key','constants');
+  $('setStat').textContent = error ? '保存失敗: '+error.message : '保存しました（全員に反映されます）';
+  if(!error) CONST = v;
 };
 
-sb.auth.onAuthStateChange((ev, session)=>{
-  if(ev==='PASSWORD_RECOVERY'){ user = session.user; showSetPw(); }
-});
+sb.auth.onAuthStateChange((ev, session)=>{ if(ev==='PASSWORD_RECOVERY'){ user = session.user; showSetPw(); } });
 boot();
 </script>
 </body>
