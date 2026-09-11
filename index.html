@@ -305,6 +305,36 @@ const $ = id => document.getElementById(id);
 const esc = s => String(s??'').replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 function toast(m){ const t=$('toast'); t.textContent=m; t.classList.add('on'); clearTimeout(toast._t); toast._t=setTimeout(()=>t.classList.remove('on'),2200); }
 const host = u => { try{ return new URL(u).hostname.replace(/^www\./,''); }catch(e){ return u; } };
+/* HP欄に入れてはいけないURL：SNS・リンク集・予約システム・口コミ／病院検索サイト・地図・短縮URL。
+   CSVのHP列にインスタのプロフィールリンク（lit.link等）が入っていると、それをHPとして導線調査が空振りするため */
+const NOT_HP_HOST = /(^|\.)(instagram\.com|instagr\.am|lit\.link|linktr\.ee|linkfly\.to|profu\.link|potofu\.me|tiktok\.com|x\.com|twitter\.com|facebook\.com|fb\.com|fb\.me|line\.me|lin\.ee|youtube\.com|youtu\.be|threads\.net|doctorqube\.com|epark\.jp|caloo\.jp|byoinnavi\.jp|doctorsfile\.jp|medley\.life|qlife\.jp|hospita\.jp|airrsv\.net|coubic\.com|select-type\.com|reservia\.jp|hotpepper\.jp|g\.page|maps\.app\.goo\.gl|bit\.ly|t\.co|tinyurl\.com)$/i;
+const toHalf = s => String(s||'').replace(/[０-９Ａ-Ｚａ-ｚ．／：－]/g, ch=>String.fromCharCode(ch.charCodeAt(0)-0xFEE0)).replace(/[ー―‐]/g,'-');
+// HP欄の値を点検：{ url:使えるHP（追跡用の ?utm_ 等は除去） , hint:HPではなかったURL , ig:インスタのURLか , why:理由 }
+function cleanHpUrl(raw){
+  let v = toHalf(raw).trim();
+  if(!v) return { url:'' };
+  if(!/^https?:\/\//i.test(v) && /^[\w-]+(\.[\w-]+)+(\/|$)/.test(v)) v = 'https://' + v;
+  let u; try{ u = new URL(v); }catch(e){ return { url:'', hint:raw, why:'URLとして読めない' }; }
+  const h = u.hostname.toLowerCase();
+  const ig = /(^|\.)(instagram\.com|instagr\.am)$/.test(h);
+  if(NOT_HP_HOST.test(h) || /(^|\.)google\.[a-z.]+$/.test(h) && /^\/maps/.test(u.pathname) || /goo\.gl$/.test(h) && /^\/maps/.test(u.pathname))
+    return { url:'', hint:u.href, ig, why: ig ? 'インスタのURL' : 'SNS・リンク集・予約／検索サイト・地図・短縮URL' };
+  ['utm_source','utm_medium','utm_campaign','utm_content','utm_term','fbclid','igshid','gclid','si'].forEach(k=>u.searchParams.delete(k));
+  u.hash = '';
+  // 採用・予約・問い合わせの下層ページ（例：/entry/）がHP欄に入っていたらサイトのトップにする。
+  // HP取得（文面の材料集め）がそのページを「トップ」として読んでしまうため。分院ページ（/iizuka.html 等）はそのまま
+  if(/^\/(entry|recruit|job|jobs|saiyo|kyujin|career|reserve|reservation|yoyaku|booking|contact|inquiry|form)([\/._-]|$)/i.test(u.pathname))
+    return { url: u.origin + '/', fixed: u.href, why:'採用・予約などの下層ページだったのでトップに直した' };
+  return { url: u.href };
+}
+// 電話番号：全角→半角。先頭の0が落ちたもの（Excel経由：734870066 / 3-5942-7550）は0を補う
+function normPhone(raw){
+  const s = toHalf(raw).replace(/^\s*[（(]\s*/,'').replace(/\s*[)）]\s*/g,'-').replace(/\s/g,'').trim();
+  const d = s.replace(/\D/g,'');
+  if(!d) return '';
+  if(/^[1-9]/.test(d) && (d.length===9 || d.length===10)) return '0' + s.replace(/^[^\d]*/,'');
+  return s;
+}
 const fmtDate = s => { try{ const d=new Date(s); return `${d.getMonth()+1}/${d.getDate()} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`; }catch(e){ return ''; } };
 
 /* ============ 工程の定義（すべての画面・件数・検索がこれを使う） ============ */
@@ -667,8 +697,9 @@ $('prepBody').addEventListener('click', async e=>{
     case 'hpok': await approveHp(c); break;
     case 'hpng': await rejectHp(c); break;
     case 'hpsave': {
-      const u = b.parentElement.querySelector('.hppaste').value.trim();
-      if(!/^https?:\/\//.test(u)){ toast('https:// から始まるURLを貼ってください'); return; }
+      const hp = cleanHpUrl(b.parentElement.querySelector('.hppaste').value);
+      if(!hp.url){ toast(hp.hint ? `これはHPではありません（${hp.why}）。クリニックの公式サイトのURLを貼ってください` : 'https:// から始まるURLを貼ってください'); return; }
+      const u = hp.url;
       const d = dupOf(c, u);
       if(d && !confirm(`同じHPの院「${d.name}」がすでにあります（重複の可能性）。このまま保存しますか？`)) return;
       if(await upd(c, { hp_url:u, gen:null, factcheck:null, src_text:null, pipe:null })){ delete genCache[c.id]; c._heavy = true; toast('保存しました →「送り先を調べる」へ'); renderAll(); }
@@ -701,6 +732,13 @@ async function saveEdit(c, tr){
   if(get('priority') !== !!c.priority) patch.priority = get('priority');
   if(get('ng') && c.status!=='NG') patch.status = 'NG';
   if(!get('ng') && c.status==='NG') patch.status = '未送信';
+  if('phone' in patch) patch.phone = normPhone(patch.phone);
+  if('hp_url' in patch && patch.hp_url){
+    const hp = cleanHpUrl(patch.hp_url);
+    if(!hp.url){ toast(`HP URLにはクリニックの公式サイトを入れてください（${hp.why}）`); return; }
+    patch.hp_url = hp.url;
+    if(patch.hp_url === (c.hp_url||'')) delete patch.hp_url;
+  }
   if('hp_url' in patch){
     const d = patch.hp_url ? dupOf(c, patch.hp_url, 'phone' in patch ? patch.phone : c.phone) : null;
     if(d && !confirm(`同じHPの院「${d.name}」がすでにあります（重複の可能性）。このまま保存しますか？`)) return;
@@ -1345,6 +1383,8 @@ async function hpOne(c){
   // 照合が通れば自動でHP URL・正式名称を確定。確証がなければ「HPを確認」へ
   const r = await callFn('findhp', { name: c.ig_name || c.name, address: c.address || '', phone: c.phone || '', ig_url: c.ig_url || '' });
   const ev = Array.isArray(r.evidence) ? r.evidence : [r.evidence].filter(Boolean);
+  // 検索結果もCSVと同じ基準で点検（SNS・予約サイトは採用しない、採用・予約の下層ページはトップに直す）
+  if(r.url){ const h = cleanHpUrl(r.url); if(!h.url){ ev.push(`⚠ 候補「${r.url}」はHPではない（${h.why}）`); r.url = ''; } else r.url = h.url; r.evidence = ev; }
   // すでに同じHPの院がある（電話が同じ／どちらか空）なら、自動では確定せず「HPを確認」に回す
   const d = r.url ? dupOf(c, r.url) : null;
   if(d){ ev.push(`⚠ 同じHPの院「${d.name}」がすでにあります（重複の可能性）`); r.evidence = ev; }
@@ -1448,21 +1488,31 @@ $('csvFile').onchange = async e=>{
   const recs = rows.slice(1).map(r=>{
     const g = n => idx(n)>=0 ? (r[idx(n)]||'').trim() : '';
     const cell = i => i>=0 ? (r[i]||'').trim() : '';
-    const name = cell(iName), url = cell(iUrl);
+    let name = cell(iName), ig_url = cell(iIg), notes = '';
+    const hp = cleanHpUrl(cell(iUrl));
+    // HP欄がインスタ・リンク集・予約システム等だった → HPは空にして「HPを探す」へ。インスタならIG欄に移す
+    if(hp.hint){
+      if(hp.ig && !ig_url) ig_url = hp.hint;
+      notes = `CSVのHP欄「${hp.hint}」はHPではないため空欄にしました（${hp.why}）`;
+    }
+    if(hp.fixed) notes = `CSVのHP欄「${hp.fixed}」は採用・予約などの下層ページだったので、サイトのトップに直しました`;
+    const igc = cleanHpUrl(ig_url);
+    const handle = igc.ig ? ((igc.hint||'').match(/instagram\.com\/([^/?#]+)/i)||[])[1] || '' : '';
+    if(!name && handle) name = handle;
     const ctm = {}; CTM_KEYS.forEach(k=>{ if(g(k)) ctm[k] = g(k); });
-    return { name: name || (url ? '（名称未取得）'+host(url) : ''), department: cell(iDept),
+    return { name: name || (hp.url ? '（名称未取得）'+host(hp.url) : ''), department: cell(iDept),
       send_channel:g('送信手段'), email:g('メアド'), form_url:g('フォームURL'), captcha:g('CAPTCHA')==='あり', director_name:g('院長名'),
-      phone:cell(iPhone), address:cell(iAddr), ig_url:cell(iIg),
-      hp_url:url, hp_excerpt:g('HP抜粋').slice(0,2000), ctm, status:g('状況')||'未送信' };
+      phone:normPhone(cell(iPhone)), address:cell(iAddr), ig_url, notes,
+      hp_url:hp.url, hp_excerpt:g('HP抜粋').slice(0,2000), ctm, status:g('状況')||'未送信' };
   }).filter(r=>r.name || r.hp_url)
     .filter(r=>!existingNames.has(r.name) && !(r.hp_url && existingUrls.has(normUrl(r.hp_url))));
   if(!recs.length){ toast('追加対象なし（全て登録済み）'); return; }
   const { error } = await sb.from('clinics').insert(recs);
   if(error){ toast('取込失敗: '+error.message); return; }
   await loadAll();
-  const nf = recs.filter(r=>!r.hp_url).length;
+  const nf = recs.filter(r=>!r.hp_url).length, nh = recs.filter(r=>/はHPではない/.test(r.notes)).length;
   sub.prep = nf ? 'find' : 'research'; selIds.clear(); go('prep');
-  toast(`${recs.length}件を追加しました（HPなし ${nf}件 →「HPを探す」）`);
+  toast(`${recs.length}件を追加しました（HPなし ${nf}件 →「HPを探す」` + (nh ? `。うち${nh}件はHP欄がインスタ・予約サイト等だったため空欄に` : '') + '）');
 };
 function exportCSV(){
   const last = lastLogMap();
