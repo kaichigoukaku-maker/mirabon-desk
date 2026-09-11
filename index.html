@@ -730,6 +730,7 @@ function renderDetail(){
       <div class="seg" id="dSeg"><button data-v="mail" class="${view==='mail'?'on':''}">メール版</button><button data-v="form" class="${view==='form'?'on':''}">フォーム版</button></div>
     </div>
     <div class="letter" id="letter">${r ? esc(previewLetter(false)) : '<span class="sm">「AIで作成」を押すと、ここに完成文面（固定文・日程調整・署名つき）が出ます。</span>'}</div>
+    ${factsPanel(c)}
     <div id="kenpin" hidden>
       <h2 class="sec">検品</h2>
       <div class="krow"><span class="k">診療の中心</span><span id="kCore">—</span></div>
@@ -748,6 +749,20 @@ function renderDetail(){
   $('dSave').onclick = async ()=>{ if(await saveEdits(c)) renderAll(); };
   $('dFact').onclick = ()=>runFactOne(c);
   if(r) renderKenpin(r, g.src);
+}
+/* ① 材料集めで抜き出した事実（宛名の判断や、文面の根拠を確かめるため） */
+function factsPanel(c){
+  const f = c.gen && c.gen.facts; if(!f) return '';
+  const li = arr => (arr||[]).map(x=>`<li>${esc(typeof x==='string' ? x : (x.quote || x.text || ''))}${x && x.date ? ` <span class="sm">(${esc(x.date)})</span>` : ''}</li>`).join('');
+  const doctors = (f.doctors||[]).map(d=>`${esc(d.name)}${d.role?`（${esc(d.role)}）`:''}`).join('、');
+  const sec = (t, arr)=> (arr && arr.length) ? `<div style="margin-top:6px"><b>${t}</b><ul style="margin:2px 0 0;padding-left:18px">${li(arr)}</ul></div>` : '';
+  return `<details style="margin-top:14px"><summary class="sm" style="cursor:pointer">材料シート（HPから抜き出した事実・引用はすべて原文と照合済み${f.verify && f.verify.dropped ? `／照合NGで除外 ${f.verify.dropped}件` : ''}）</summary>
+    <div class="alert ok" style="font-size:12px">
+      <div><b>院長</b>：${esc((f.director&&f.director.name)||'（読み取れず）')}${doctors ? `　<b>他の医師</b>：${doctors}` : ''}</div>
+      ${f.core ? `<div><b>診療の中心</b>：${esc(f.core)}</div>` : ''}
+      ${sec('専門・特徴', f.specialty)}${sec('院長の経歴', f.career)}${sec('理念・言葉', f.philosophy)}${sec('お知らせの動き', f.news)}${sec('印象的な一文', f.notable_lines)}
+      ${sec('使ってはいけない情報', f.do_not_use)}${sec('確認が必要なこと', f.cautions)}
+    </div></details>`;
 }
 function onDetailEdit(){
   if(!getGen(sel)) return;
@@ -803,9 +818,9 @@ async function saveEdits(c, opts){
 }
 async function aiGenerate(c){
   if(getGen(c) && !confirm('作り直すと、手直しした内容は消えます。よろしいですか？')) return;
-  $('dGen').disabled = true; $('dStat').textContent = 'HPを取得して生成中…（1〜2分）';
+  $('dGen').disabled = true; $('dStat').textContent = 'HPを取得中…';
   try{
-    const { r, sc } = await genOne(c);
+    const { r, sc } = await genOne(c, m=>{ if(sel && sel.id===c.id && $('dStat')) $('dStat').textContent = m; });
     const bad = verifyQuotes(r.quotes, sc.text).filter(x=>!x.ok).length;
     const retry = r.retried ? '（照合NGを検出→自動で作り直し済み）' : '';
     renderAll();
@@ -1034,17 +1049,29 @@ async function callFn(name, body){
     body: JSON.stringify(body)
   });
   const j = await res.json().catch(()=>({ error:'応答を解釈できません' }));
-  if(!res.ok) throw new Error(j.message || j.error || ('HTTP '+res.status));
+  if(!res.ok) throw Object.assign(new Error(j.message || j.error || ('HTTP '+res.status)), { status: res.status });
   return j;
 }
-async function genOne(c){
+async function genOne(c, onStep){
+  // 2段階：① 材料集め（HPから事実を抜き出し、引用を原文と照合）→ ② 執筆（照合済みの材料だけで書く）。それぞれ別の150秒枠
+  const step = m=>{ if(onStep) onStep(m); };
+  step('HPを取得中…');
   const sc = await callFn('scrape', { url: c.hp_url });
   const materials = Object.assign({}, c.ctm || {});
   if(c.hp_excerpt) materials['HP抜粋'] = c.hp_excerpt;
-  const r = await callFn('generate', { source_text: sc.text, clinic_name: c.name, department: c.department, materials });
+  step('① 材料集め中…（HPから事実を抜き出して原文と照合）');
+  const facts = await callFn('extract', { source_text: sc.text, clinic_name: c.name, department: c.department || '', materials });
+  step('② 執筆中…（照合済みの材料だけで個別化パートを書く）');
+  const base = { facts, source_text: sc.text, clinic_name: c.name, department: c.department || '' };
+  let r = await callFn('generate', base);
+  if(r.bad_quotes && r.bad_quotes.length){
+    step('② 引用が原文と合わない箇所があったので書き直し中…');
+    const r2 = await callFn('generate', Object.assign({}, base, { fix: r.bad_quotes, previous: r }));
+    r = Object.assign(r2, { retried:true });
+  }
   genCache[c.id] = { result: r, src: sc.text };
   // 作り直したら前の検証は無効。AIが読み取った院長名はその場で保存
-  const patch = { gen:{ result:r, src:sc.text, at:new Date().toISOString() }, factcheck:null };
+  const patch = { gen:{ result:r, src:sc.text, facts, at:new Date().toISOString() }, factcheck:null };
   const d = (r.director||'').trim();
   if(d && !c.director_name) patch.director_name = d;
   const { error } = await sb.from('clinics').update(patch).eq('id', c.id);
