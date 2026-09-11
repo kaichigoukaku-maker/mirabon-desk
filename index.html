@@ -192,6 +192,8 @@ th{font-size:11px;color:var(--sub);letter-spacing:.08em;border-top:none}
         <option value="res">調査済みのみ</option>
         <option value="miss">情報に欠けあり</option>
         <option value="full">情報◎（欠けなし）</option>
+        <option value="factng">ファクトチェック要確認</option>
+        <option value="unfact">未検証（文面あり）</option>
         <option value="cand">HP候補（承認待ち）</option>
         <option value="nohp">HPなし（手貼り対象）</option>
         <option value="1">★のみ</option>
@@ -203,6 +205,7 @@ th{font-size:11px;color:var(--sub);letter-spacing:.08em;border-top:none}
     </div>
     <div class="btns">
       <button class="primary mini" id="aiBatch">選択をAI生成</button>
+      <button class="mini" id="factBatch">選択をファクトチェック</button>
       <button class="mini" id="resBatch">選択を導線調査</button>
       <button class="mini" id="hpBatch">選択をHP補完</button>
       <button class="mini" id="csvIn">CSV取込</button>
@@ -328,6 +331,8 @@ function filtered(){
     (pr!=='res' || rowState(c).researched) &&
     (pr!=='miss' || rowState(c).missing.length>0) &&
     (pr!=='full' || rowState(c).missing.length===0) &&
+    (pr!=='factng' || rowState(c).factNg) &&
+    (pr!=='unfact' || (!!c.gen && !c.factcheck)) &&
     (pr!=='cand' || rowState(c).cand) &&
     (pr!=='nohp' || (!c.hp_url && !rowState(c).cand))
   );
@@ -346,9 +351,13 @@ function rowState(c){
   const dead = ['未対応','取得失敗'].includes(c.send_channel) || ['NG','辞退'].includes(c.status);
   const sent = c.status==='送信済';
   const replied = ['返信あり','アポ'].includes(c.status);
-  const ready = !sent && !replied && !dead && c.hp_url && hasDest && !!c.gen;
+  const fc = c.factcheck || null;
+  const factOk = !!fc && fc.verdict === 'OK';
+  const factNg = !!fc && fc.verdict !== 'OK';
+  // 「送信可（緑）」はファクトチェックOKまで通った院だけ。未検証は黄色の準備中扱い
+  const ready = !sent && !replied && !dead && c.hp_url && hasDest && !!c.gen && factOk;
   const cls = replied ? 'replied' : (sent ? 'sent' : (dead ? 'dead' : (ready ? 'ready' : '')));
-  return { researched, cand, hasDest, missing, dead, sent, replied, ready, cls };
+  return { researched, cand, hasDest, missing, dead, sent, replied, ready, cls, fc, factOk, factNg };
 }
 function renderList(){
   const list = filtered();
@@ -356,7 +365,8 @@ function renderList(){
   $('lCount').innerHTML = `${list.length} 件（全 ${clinics.length} 件）`
     + `　<span style="color:var(--accent-ink)">送信可 ${n(c=>rowState(c).ready)}</span>`
     + `　調査済 ${n(c=>rowState(c).researched)}`
-    + `　情報◎ ${n(c=>rowState(c).missing.length===0)}`
+    + `　検証✓ ${n(c=>rowState(c).factOk)}`
+    + `　<span style="color:var(--bad)">要確認 ${n(c=>rowState(c).factNg)}</span>`
     + `　送信済 ${n(c=>c.status==='送信済')}`;
   $('clist').innerHTML = list.map(c=>{
     const s = rowState(c);
@@ -368,7 +378,8 @@ function renderList(){
             ? `<span class="pill bad">調査済 ${esc(c.send_channel)}</span>`
             : `<span class="pill">調査済 ${esc(c.send_channel||'')}${c.captcha?'･CAPTCHA':''}</span>`)
         : (c.send_channel ? `<span class="pill warn">未調査（CSV:${esc(c.send_channel)}）</span>` : '<span class="pill dim">未調査</span>')) +
-      (c.gen?'<span class="pill">文面✓</span>':'<span class="pill dim">文面 未</span>');
+      (c.gen?'<span class="pill">文面✓</span>':'<span class="pill dim">文面 未</span>') +
+      (s.factOk?'<span class="pill">検証✓</span>':(s.factNg?`<span class="pill bad">要確認${(s.fc.counts&&s.fc.counts.ng)?' '+s.fc.counts.ng:''}</span>`:(c.gen?'<span class="pill dim">未検証</span>':'')));
     // 2段目：情報の欠け（HP/宛先/TEL/院長名）
     const info = s.missing.length
       ? `<span class="miss">欠: ${s.missing.join('・')}</span>`
@@ -590,6 +601,26 @@ function renderDetail(){
     </div>
     <div class="sheet"><textarea id="letter" spellcheck="false" placeholder="「AIで作成」か「文面に組み立てる」でここに完成文面が入ります。手直しもこの欄で。"></textarea></div>
 
+    <div class="btns" style="margin-top:10px">
+      <button id="dFact"${c.gen?'':' disabled title="先にAI生成が必要です"'}>ファクトチェック（別モデルで検証）</button>
+      <span class="status" id="dFactStat" style="margin:0">${c.factcheck?`最終検証 ${esc((c.factcheck.checked_at||'').slice(0,16).replace('T',' '))}（${esc(c.factcheck.model||'')}）`:'未検証'}</span>
+    </div>
+    ${(()=>{
+      const f = c.factcheck; if(!f) return '';
+      const ok = f.verdict==='OK';
+      const claims = Array.isArray(f.claims)?f.claims:[];
+      const ng = claims.filter(x=>x.verdict && x.verdict!=='裏付けあり');
+      const tone = Array.isArray(f.tone)?f.tone:[];
+      return `<div class="alert ${ok?'':'bad'}" style="${ok?'background:var(--accent-weak);color:var(--ink)':''}">
+        <b>${ok?'✓ ファクトチェックOK':'⚠ 要確認'}</b>　${esc(f.summary||'')}
+        ${ng.length?`<div style="margin-top:8px"><b>裏付けのない記述 ${ng.length}件</b>${ng.map(x=>`<div class="quote bad" style="margin-top:6px"><span class="m">✗</span><span>「${esc(x.text||'')}」<br><span style="opacity:.8">${esc(x.verdict||'')}${x.severity?'／重要度'+esc(x.severity):''}${x.evidence?'／原文: '+esc(String(x.evidence).slice(0,80)):''}</span></span></div>`).join('')}</div>`:''}
+        ${(f.address&&f.address.risk)?`<div style="margin-top:8px"><b>宛名リスク</b>：${esc(f.address.note||'')}</div>`:''}
+        ${(f.department&&f.department.match===false)?`<div style="margin-top:8px"><b>診療科の不一致</b>：${esc(f.department.note||'')}</div>`:''}
+        ${tone.length?`<div style="margin-top:8px"><b>トーン規範の違反 ${tone.length}件</b>${tone.map(t=>`<div style="margin-top:4px">・${esc(t.issue||'')}：「${esc(t.quote||'')}」</div>`).join('')}</div>`:''}
+        ${(ok&&claims.length)?`<div style="margin-top:6px;font-size:11.5px;opacity:.85">${claims.length}件の事実主張すべてに原文の裏付けを確認</div>`:''}
+      </div>`;
+    })()}
+
     <div id="kenpin" hidden>
       <h2 class="sec">検品</h2>
       <div class="krow"><span class="k">診療の中心</span><span id="kCore">—</span></div>
@@ -664,6 +695,12 @@ function bindDetail(){
       +'&su='+encodeURIComponent(CONST.subject||'')+'&body='+encodeURIComponent($('letter').value);
     window.open(u,'_blank');
   };
+  const fb = $('dFact');
+  if(fb) fb.onclick = async ()=>{
+    fb.disabled = true; $('dFactStat').textContent = '別モデルで検証中…（1〜2分）';
+    try{ await factOne(c); toast('検証が完了しました'); renderDetail(); renderList(); }
+    catch(e){ $('dFactStat').textContent = '失敗: '+e.message; fb.disabled = false; }
+  };
   $('dSent').onclick = markSent;
   $('dReply').onclick = ()=>markResult('返信あり','返信');
   $('dApo').onclick = ()=>markResult('アポ','アポ');
@@ -727,7 +764,8 @@ async function genOne(c){
   const r = await callFn('generate', { source_text: sc.text, clinic_name: c.name, department: c.department, materials });
   genCache[c.id] = { result: r, src: sc.text };
   const gen = { result: r, src: sc.text, at: new Date().toISOString() };
-  const patch = { gen };
+  // 文面を作り直したら、前の検証結果は無効（古い文面に対する検証を引きずらせない）
+  const patch = { gen, factcheck: null };
   // AIがHPから読み取った院長名は、その場でDBに保存する（宛名・リストの「欠: 院長名」に反映）
   const d = (r.director||'').trim();
   if(d && !c.director_name) patch.director_name = d;
@@ -769,7 +807,8 @@ async function markSent(){
     clinic_id: c.id, draft_type: draftType, format: view==='form'?'フォーム':'メール',
     subject: CONST.subject||'', body,
     why_you: f.why_you.text, why_now: f.why_now.text, patient_needs: f.kasetsu.text,
-    qa: g ? { core: g.result.core, quotes_check: verifyQuotes(g.result.quotes, g.src), cautions: g.result.cautions } : {},
+    qa: g ? { core: g.result.core, quotes_check: verifyQuotes(g.result.quotes, g.src), cautions: g.result.cautions,
+              factcheck: c.factcheck ? { verdict: c.factcheck.verdict, counts: c.factcheck.counts, model: c.factcheck.model } : null } : {},
     model: g && g.result.model || null, created_by: user.id
   }).select().single();
   if(e1){ toast('保存失敗: '+e1.message); return; }
@@ -868,6 +907,22 @@ function parseCSV(text){
   return rows.filter(r=>r.some(c=>c.trim()));
 }
 /* ============ 一括処理（1件ずつ独立したパイプライン・同時2件・混雑時は1回だけ再試行） ============ */
+async function factOne(c){
+  // 生成とは別モデル（kimi-k2.6）で独立検証。文面を作り直した場合は再検証が要る
+  const g = getGen(c);
+  if(!g || !g.result) throw new Error('先にAI生成が必要です');
+  const r = g.result;
+  const fc = await callFn('factcheck', {
+    source_text: g.src, clinic_name: c.name, department: c.department || '',
+    director: c.director_name || r.director || '',
+    why_you: (r.why_you&&r.why_you.text)||'', why_now: (r.why_now&&r.why_now.text)||'',
+    kasetsu: (r.kasetsu&&r.kasetsu.text)||'',
+  });
+  const { error } = await sb.from('clinics').update({ factcheck: fc }).eq('id', c.id);
+  if(error) throw new Error(error.message);
+  c.factcheck = fc;
+  return fc;
+}
 async function researchOne(c){
   const r = await callFn('research', { url: c.hp_url });
   const patch = { send_channel: r.channel, research: Object.assign({}, c.research||{}, r), captcha: !!r.captcha };
@@ -951,6 +1006,7 @@ async function runBatch(btn, items, fn, label, doneMsg){
   btn.disabled = false;
 }
 $('aiBatch').onclick = ()=>runBatch($('aiBatch'), selected().filter(c=>c.hp_url), genOne, 'AI生成', '「文面✓」の院を開いて検品→送信してください。');
+$('factBatch').onclick = ()=>runBatch($('factBatch'), selected().filter(c=>!!getGen(c)), factOne, 'ファクトチェック', '「検証✓」は裏付けOK。「要確認」の院は開いて指摘を確認してください。');
 $('resBatch').onclick = ()=>runBatch($('resBatch'), selected().filter(c=>c.hp_url), researchOne, '導線調査', '送信手段が4分類に更新されました。');
 $('hpBatch').onclick = ()=>runBatch($('hpBatch'), selected().filter(c=>!c.hp_url), hpOne, 'HP補完', '照合OKは自動確定済み。「HP候補（承認待ち）」フィルタに残った⚠だけ目視で採用／却下してください。');
 
