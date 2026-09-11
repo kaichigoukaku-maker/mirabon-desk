@@ -1331,8 +1331,11 @@ async function resetAll(c){
 async function researchOne(c){
   const r = await callFn('research', { url: c.hp_url });
   const patch = { send_channel: r.channel, research: Object.assign({}, c.research||{}, r), captcha: !!r.captcha };
-  if(r.email) patch.email = r.email;
-  if(r.form_url) patch.form_url = r.form_url;
+  // 前回の自動調査で入った値（手入力ではない）は、今回の結果で置き換える（誤検出を調べ直しで消せるように）。手入力の値は残す
+  const prev = c.research || {};
+  const auto = k => !c[k] || c[k] === (prev[k==='email' ? 'email' : 'form_url'] || '');
+  if(r.email || auto('email')) patch.email = r.email || '';
+  if(r.form_url || auto('form_url')) patch.form_url = r.form_url || '';
   if(r.title && /^（名称未取得）/.test(c.name||'')) patch.name = r.title.split(/[|｜]/)[0].trim() || c.name;
   const { error } = await sb.from('clinics').update(patch).eq('id', c.id);
   if(error) throw new Error(error.message);
@@ -1396,7 +1399,10 @@ async function runBatch(p, label, items, fn, doneMsg){
       const n = Math.max(0, items.length - a - q - ng);
       return `内訳：自動で確定 ${a}件／「HPを確認」へ ${q}件／見つからず ${n}件` + (n ? '（このタブに残ります。行内にURLを貼ってください）' : '') + '。';
     });
-    if(k==='res')   runBatch(p, '導線調査', S.filter(c=>c.hp_url), researchOne, '送り先が見つかった院は「② 文面・検証」へ移りました。');
+    if(k==='res')   runBatch(p, '導線調査', S.filter(c=>c.hp_url), researchOne, (items, ng)=>{
+      const n = ch => items.filter(c=>c.send_channel===ch).length;
+      return `内訳：メール ${n('メール')}件・フォーム ${n('フォーム')}件（「② 文面・検証」へ）／要目視 ${n('要目視')}件（このタブに残ります。HPを開いて確認→「編集」で入力）／窓口なし ${n('未対応')+n('取得失敗')}件（「対象外」へ）。`;
+    });
     if(k==='gen')   runBatch(p, 'AI生成', S.filter(c=>c.hp_url), c=>runPipeline(c), '次は「検証する」タブでファクトチェック。');
     if(k==='regen'){ if(S.length && confirm(S.length+'件の文面を作り直します（集めた材料はそのまま使います）。手直しした内容は消えます。よろしいですか？')) runBatch(p, 'AI作り直し', S.filter(c=>c.hp_url), async c=>{ await resetWrite(c); await runPipeline(c); }, '次は「検証する」タブでファクトチェック。'); }
     if(k==='fact')  runBatch(p, 'ファクトチェック', S.filter(c=>!!getGen(c)), c=>runFact(c), 'OKの院は「③ 送信」へ。要確認は「直す」タブへ移りました。');
