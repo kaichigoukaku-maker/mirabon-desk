@@ -357,7 +357,7 @@ const NOTE = {
   all:'すべての院。「編集」からHP・電話・送り先・メモを直せます。',
   write:'材料集め（人 → 特徴・動き）→ 執筆 の順に進みます（1件約2〜3分）。工程ごとに保存するので、失敗しても押し直せば失敗した工程から再開します。',
   verify:'生成とは別のモデルで「事実の裏付け」と「宛名・診療科・表現」を同時に検証します。OKなら ③送信 に移ります。',
-  fix:'検証で指摘が出た院。右で直して「修正を保存」→ もう一度ファクトチェック。',
+  fix:'検証で指摘が出た院。右で直して「修正を保存」→ もう一度ファクトチェック。指摘が的外れで、このまま送ってよい場合は「指摘を確認済みにして送信へ」。指摘は消えず、③送信の画面にも出ます。',
   waiting:'送信済みで返事を待っている院。返事が来たら結果を記録してください。',
   result:'返信・アポ・お断りの記録。',
 };
@@ -773,7 +773,7 @@ function renderWrite(keepDetail){
   let btns = '';
   if(st==='write')  btns = `<button class="primary mini" data-batch="gen"${dis}>選択をAI生成</button>`;
   if(st==='verify') btns = `<button class="primary mini" data-batch="fact"${dis}>選択をファクトチェック</button>`;
-  if(st==='fix')    btns = `<button class="mini" data-batch="regen"${dis}>選択をAIで作り直す</button>`;
+  if(st==='fix')    btns = `<button class="mini" data-batch="regen"${dis}>選択をAIで作り直す</button><button class="mini" data-batch="okfix"${dis}>選択を確認済みにして送信へ</button>`;
   $('tb_write').innerHTML = toolbar('write', btns, NOTE[st]);
   bindToolbar('write');
   $('clist').innerHTML = list.map(c=>{
@@ -811,8 +811,10 @@ function factPanel(c){
   const claims = Array.isArray(f.claims) ? f.claims : [];
   const ng = claims.filter(x=>x.verdict && x.verdict!=='裏付けあり');
   const tone = Array.isArray(f.tone) ? f.tone : [];
-  return `<div class="alert ${ok?'ok':'bad'}">
-    <b>${ok ? '✓ ファクトチェックOK' : '⚠ 要確認'}</b>　${esc(f.summary||'')}
+  const ovr = !!f.overridden;
+  return `<div class="alert ${ovr?'warn':(ok?'ok':'bad')}">
+    <b>${ovr ? '⚠ 指摘ありだが人が確認して通した' : (ok ? '✓ ファクトチェックOK' : '⚠ 要確認')}</b>　${esc(f.summary||'')}
+    ${ovr ? `<div class="sm" style="margin-top:4px">確認者：${esc(f.overridden_by||'')}　${esc(fmtDate(f.overridden_at))}　<button class="mini" id="dUnOk">確認済みを取り消す</button></div>` : ''}
     ${ng.length ? `<div style="margin-top:8px"><b>裏付けのない記述 ${ng.length}件</b>${ng.map(x=>`<div class="quote bad" style="margin-top:6px"><span class="m">✗</span><span>「${esc(x.text||'')}」<br><span style="opacity:.85">${esc(x.verdict||'')}${x.severity?'／重要度'+esc(x.severity):''}${x.evidence?'／原文: '+esc(String(x.evidence).slice(0,90)):''}</span></span></div>`).join('')}</div>` : ''}
     ${(f.address && f.address.risk) ? `<div style="margin-top:8px"><b>宛名リスク</b>：${esc(f.address.note||'')}</div>` : ''}
     ${(f.department && f.department.match===false) ? `<div style="margin-top:8px"><b>診療科の不一致</b>：${esc(f.department.note||'')}</div>` : ''}
@@ -850,6 +852,7 @@ function renderDetail(){
       <button class="primary" id="dGen"${c.hp_url?'':' disabled'}>${r ? 'AIで作り直す（材料はそのまま）' : (['src','people','features','signals'].some(k=>stepState(c,k)==='ok') ? 'AIで作成（続きから）' : 'AIで作成')}</button>
       <button id="dSave"${r?'':' disabled'}>修正を保存（→ 再検証）</button>
       <button id="dFact"${r?'':' disabled'}>ファクトチェック</button>
+      ${st==='fix' ? `<button class="primary" id="dOk" title="指摘を読んだうえで、この文面のまま送ると判断したとき">指摘を確認済みにして送信へ</button>` : ''}
       <span class="status" id="dStat" style="margin:0"></span>
     </div>
     <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-top:18px">
@@ -875,6 +878,8 @@ function renderDetail(){
   $('dGen').onclick = ()=>aiGenerate(c);
   $('dSave').onclick = async ()=>{ if(await saveEdits(c)) renderAll(); };
   $('dFact').onclick = ()=>runFactOne(c);
+  if($('dOk')) $('dOk').onclick = ()=>approveFact(c);
+  if($('dUnOk')) $('dUnOk').onclick = ()=>unapproveFact(c);
   $('dReset').onclick = async ()=>{
     if(!confirm('HP本文・集めた材料・文面・検証結果をすべて消して、HPの取得からやり直します。よろしいですか？')) return;
     await resetAll(c); renderAll(); toast('消しました。「AIで作成」を押すとHPの取得から始めます');
@@ -972,6 +977,20 @@ async function aiGenerate(c){
     if(sel && sel.id===c.id && $('dStat')) $('dStat').textContent = '失敗：' + e.message + '（もう一度押すと、失敗した工程から再開します）';
   }
 }
+/* 指摘が出たが人の判断で送ると決めた院を ③送信 へ通す。指摘は消さずに残し、誰がいつ通したかを記録する */
+async function approveFact(c){
+  const f = c.factcheck; if(!f) return;
+  const ng = (Array.isArray(f.claims)?f.claims:[]).filter(x=>x.verdict && x.verdict!=='裏付けあり').length;
+  if(!confirm(`${c.name}\n指摘${ng?ng+'件':''}を確認したうえで、この文面のまま送信に進めます。よろしいですか？\n（指摘は残り、③送信の画面にも表示されます）`)) return;
+  const fc = Object.assign({}, f, { verdict:'OK', overridden:true, original_verdict:f.verdict, overridden_by:(user&&user.email)||'', overridden_at:nowIso() });
+  if(await upd(c, { factcheck: clean(fc) })){ toast('確認済みにしました → ③送信 へ'); renderAll(); }
+}
+async function unapproveFact(c){
+  const f = c.factcheck; if(!f || !f.overridden) return;
+  const fc = Object.assign({}, f, { verdict: f.original_verdict || '要確認' });
+  delete fc.overridden; delete fc.overridden_by; delete fc.overridden_at; delete fc.original_verdict;
+  if(await upd(c, { factcheck: clean(fc) })){ toast('確認済みを取り消しました →「直す」に戻ります'); renderAll(); }
+}
 async function runFactOne(c){
   if(isDirty()) await saveEdits(c, { silent:true });
   if(c.factcheck) await resetFact(c);   // 検証済みを押し直した＝最初から検証し直す
@@ -1066,7 +1085,8 @@ function renderQueue(list, todayN){
     <div class="qcard">
       <div class="dhead"><h2 class="serif">${c.priority?'★ ':''}${esc(c.name)}</h2><span class="sub">${esc(c.department||'')}</span></div>
       <div class="sm" style="margin:6px 0 10px">宛名：<b>${esc(c.director_name ? c.director_name+' 先生' : '院長先生')}</b>　送り先：${c.email ? 'メール '+esc(c.email) : ''}${c.email && c.form_url ? ' ／ ' : ''}${c.form_url ? 'フォーム'+(c.captcha?'（CAPTCHAあり）':'') : ''}
-        ${fc ? `<br><span class="pill">検証✓</span> ${esc(fc.summary||'')}` : ''}</div>
+        ${fc ? `<br><span class="pill${fc.overridden?' warn':''}">${fc.overridden?'指摘あり・確認済み':'検証✓'}</span> ${esc(fc.summary||'')}` : ''}</div>
+      ${fc && fc.overridden ? `<div class="alert warn" style="margin-bottom:8px">⚠ ファクトチェックの指摘を、人が確認したうえで通した文面です（${esc(fc.overridden_by||'')}）${(Array.isArray(fc.claims)?fc.claims:[]).filter(x=>x.verdict&&x.verdict!=='裏付けあり').map(x=>`<div class="sm" style="margin-top:4px">✗「${esc(x.text||'')}」${esc(x.verdict||'')}${x.severity?'／重要度'+esc(x.severity):''}</div>`).join('')}</div>` : ''}
       ${dupGroups().some(g=>g.includes(c)) ? `<div class="alert bad" style="margin-bottom:8px">⚠ この院は重複の疑いがあります（同じHP・電話の行が他にもあります）。二重に送らないよう、① の「重複の疑い」で整理してから送ってください</div>` : ''}
       ${form ? '' : `<div class="sm" style="margin-bottom:6px">件名：${esc(CONST.subject||'')}　<button class="mini" id="qSubj">件名をコピー</button></div>`}
       <div class="letter">${esc(letter)}</div>
@@ -1128,7 +1148,8 @@ async function markSent(c, form){
     clinic_id:c.id, draft_type:draftType, format: form?'フォーム':'メール', subject: CONST.subject||'', body,
     why_you:(r.why_you&&r.why_you.text)||'', why_now:(r.why_now&&r.why_now.text)||'', patient_needs:(r.kasetsu&&r.kasetsu.text)||'',
     qa:{ core:r.core, quotes_check:verifyQuotes(r.quotes, g.src), cautions:r.cautions,
-         factcheck: c.factcheck ? { verdict:c.factcheck.verdict, counts:c.factcheck.counts, model:c.factcheck.model } : null },
+         factcheck: c.factcheck ? { verdict:c.factcheck.verdict, counts:c.factcheck.counts, model:c.factcheck.model,
+           overridden: !!c.factcheck.overridden, overridden_by: c.factcheck.overridden_by||null, original_verdict: c.factcheck.original_verdict||null } : null },
     model: r.model||null, created_by:user.id
   }).select().single();
   if(e1){ toast('保存失敗: '+e1.message); renderAll(); return; }
@@ -1445,6 +1466,14 @@ async function runBatch(p, label, items, fn, doneMsg){
     });
     if(k==='gen')   runBatch(p, 'AI生成', S.filter(c=>c.hp_url), c=>runPipeline(c), '次は「検証する」タブでファクトチェック。');
     if(k==='regen'){ if(S.length && confirm(S.length+'件の文面を作り直します（集めた材料はそのまま使います）。手直しした内容は消えます。よろしいですか？')) runBatch(p, 'AI作り直し', S.filter(c=>c.hp_url), async c=>{ await resetWrite(c); await runPipeline(c); }, '次は「検証する」タブでファクトチェック。'); }
+    if(k==='okfix'){ const t = S.filter(c=>c.factcheck && c.factcheck.verdict!=='OK');
+      if(t.length && confirm(`${t.length}件の指摘を確認したうえで、そのまま送信に進めます。よろしいですか？（指摘は残り、③送信の画面にも出ます）`))
+        runBatch(p, '確認済みにする', t, async c=>{
+          const f = c.factcheck;
+          const fc = Object.assign({}, f, { verdict:'OK', overridden:true, original_verdict:f.verdict, overridden_by:(user&&user.email)||'', overridden_at:nowIso() });
+          if(!(await upd(c, { factcheck: clean(fc) }))) throw new Error('保存できませんでした');
+        }, '「③ 送信」へ移りました。送信画面にも指摘が表示されます。');
+    }
     if(k==='fact')  runBatch(p, 'ファクトチェック', S.filter(c=>!!getGen(c)), c=>runFact(c), 'OKの院は「③ 送信」へ。要確認は「直す」タブへ移りました。');
     if(k==='dupkeep') return;
     if(k==='csvin') $('csvFile').click();
