@@ -1035,10 +1035,16 @@ function mediaBlock(dept){
   if(hit) m += '\n▼'+hit[0].trim()+'の掲載例：'+hit[1].trim()+'\n'+hit[2].trim();
   return m;
 }
+function ensureSentenceEnd(value) {
+  const text = typeof value === 'string' ? value.trim() : '';
+  if (!text || /[。！？.!?]$/u.test(text)) return text;
+  return text + '。';
+}
+
 function assemble(r, form, dept){
   const F = CONST;
   const to = (r.director||'').trim() ? r.director.trim()+' 先生' : '院長先生';
-  const youT = (r.why_you&&r.why_you.text||'').trim(), nowT = (r.why_now&&r.why_now.text||'').trim(), kaT = (r.kasetsu&&r.kasetsu.text||'').trim();
+  const youT = ensureSentenceEnd(r.why_you&&r.why_you.text), nowT = ensureSentenceEnd(r.why_now&&r.why_now.text), kaT = ensureSentenceEnd(r.kasetsu&&r.kasetsu.text);
   const p4 = kaT ? (kaT + (F.interview||'')) : (F.interviewSolo||'');
   const timerex = F.timerex_url ? '\n\n▼日程調整\n'+F.timerex_url : '';
   if(form){
