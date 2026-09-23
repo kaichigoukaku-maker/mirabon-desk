@@ -341,7 +341,10 @@ function cleanHpUrl(raw){
 }
 // 電話番号：全角→半角。先頭の0が落ちたもの（Excel経由：734870066 / 3-5942-7550）は0を補う
 function normPhone(raw){
-  const s = toHalf(raw).replace(/^\s*[（(]\s*/,'').replace(/\s*[)）]\s*/g,'-').replace(/\s/g,'').trim();
+  let s = toHalf(raw).replace(/^\s*[（(]\s*/,'').replace(/\s*[)）]\s*/g,'-').replace(/\s/g,'').trim();
+  // 国際表記（+81 90-1234-5678／0081-3-…／81 3-…）は日本国内の0始まりに直す
+  const intl = s.match(/^(?:\+|00)?81[-.]?(\d[\d-]*)$/);
+  if(intl) s = '0' + intl[1].replace(/^-+/,'');
   const d = s.replace(/\D/g,'');
   if(!d) return '';
   if(/^[1-9]/.test(d) && (d.length===9 || d.length===10)) return '0' + s.replace(/^[^\d]*/,'');
