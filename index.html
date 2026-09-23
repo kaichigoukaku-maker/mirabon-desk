@@ -1587,14 +1587,22 @@ function renderAuto(){
       <button class="mini" id="autoCancel">やめる</button>
     </div>
     <div class="status">見込み：リスト ${est.n.toLocaleString()}件を消費／およそ ${est.min}分／API費用 およそ ${est.yen.toLocaleString()}円（同時${CONC}件のとき）</div>
-    ${leftover.n && autoForm.finishFirst ? `<div class="status" style="color:var(--warn)">先に、途中まで進んでいる院を仕上げます：送り先 ${q.res.length}件・文面 ${q.gen.length}件・検証 ${q.fact.length}件（およそ ${leftover.yen.toLocaleString()}円・${leftover.min}分）。チェックを外すと、今回取り出した院だけを進めます。</div>` : ''}
+    <div class="status">進む順番：${(autoForm.finishFirst && leftover.n
+        ? [q.fact.length?`残っている検証 ${q.fact.length}件`:'', q.gen.length?`残っている文面 ${q.gen.length}件`:'', q.res.length?`残っている送り先 ${q.res.length}件`:'', '新しい院（HPを探す→送り先→文面→検証）']
+        : ['新しい院を取り出す（HPを探す）', '送り先を調べる', '文面をつくる', '検証する']).filter(Boolean).join(' → ')}</div>
+    ${leftover.n && autoForm.finishFirst ? `<div class="status" style="color:var(--warn)">先に片付ける分だけで およそ ${leftover.yen.toLocaleString()}円・${leftover.min}分かかります。新しい院から始めたいときは、チェックを外してください。</div>` : ''}
     <div class="note">${autoForm.goal==='letters'
       ? '送り先が見つかるのは調べた院の約12%なので、文面1件あたり8件ほどリストを使います。'
       : '取り出した院は、送り先が見つかれば文面と検証まで進めます。'}　人の確認が要る院（HPを確認・目で確認）は飛ばして、最後に件数を報告します。</div>`;
-  box.querySelectorAll('input[name=autogoal]').forEach(r=>r.onchange=()=>{ autoForm.goal = r.value; renderAuto(); });
+  box.querySelectorAll('input[name=autogoal]').forEach(r=>r.onchange=()=>{
+    autoForm.goal = r.value;
+    // 「リストを◯件消費」は新しい院から始めるのが自然。「送れる文面を◯件」は途中の院を仕上げるのが早い
+    if(!autoForm.touchedFF) autoForm.finishFirst = (r.value === 'letters');
+    renderAuto();
+  });
   $('autoN').onchange = e=>{ autoForm.n = Math.max(1, Math.min(2000, +e.target.value||1)); renderAuto(); };
   $('autoYen').onchange = e=>{ autoForm.yen = Math.max(100, +e.target.value||1500); renderAuto(); };
-  $('autoFF').onchange = e=>{ autoForm.finishFirst = e.target.checked; renderAuto(); };
+  $('autoFF').onchange = e=>{ autoForm.finishFirst = e.target.checked; autoForm.touchedFF = true; renderAuto(); };
   $('autoCancel').onclick = ()=>{ autoForm.open = false; renderAuto(); };
   $('autoGo').onclick = ()=>{ autoForm.open = false; try{ localStorage.setItem('mirabon_auto', JSON.stringify({ goal:autoForm.goal, n:autoForm.n, yen:autoForm.yen, finishFirst:autoForm.finishFirst })); }catch(e){} autoRun(); };
 }
