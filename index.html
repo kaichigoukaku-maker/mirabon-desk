@@ -339,12 +339,12 @@ const fmtDate = s => { try{ const d=new Date(s); return `${d.getMonth()+1}/${d.g
 
 /* ============ 工程の定義（すべての画面・件数・検索がこれを使う） ============ */
 const PAGES = {
-  prep:  { label:'① リスト整備', stages:['find','confirm','research','excluded'], tabs:['find','confirm','research','excluded','dup','all'] },
+  prep:  { label:'① リスト整備', stages:['find','confirm','research','nohp','visual','excluded'], tabs:['find','confirm','research','visual','nohp','excluded','dup','all'] },
   write: { label:'② 文面・検証', stages:['write','verify','fix'],               tabs:['write','verify','fix'] },
   send:  { label:'③ 送信',       stages:['send','waiting','result'],            tabs:['send','waiting','result'] },
 };
 const STAGE_LABEL = {
-  find:'HPを探す', confirm:'HPを確認', research:'送り先を調べる', excluded:'対象外', dup:'重複の疑い', all:'すべて',
+  find:'HPを探す', confirm:'HPを確認', research:'送り先を調べる', visual:'目で確認', nohp:'HPが見つからず', excluded:'対象外', dup:'重複の疑い', all:'すべて',
   write:'文面を作る', verify:'検証する', fix:'直す',
   send:'送る', waiting:'返事待ち', result:'返信・結果',
 };
@@ -352,6 +352,8 @@ const NOTE = {
   find:'HPが見つかっていない院。「選択をHP補完」で自動検索し、見つからない院は行内にURLを貼ってください。',
   confirm:'自動検索で候補は出たが確証がない院。リンクを開いて確かめ、採用／却下してください。',
   research:'HPから問い合わせフォーム・メールを探します。見つからない院は「編集」で手入力できます。',
+  visual:'問い合わせページはあるが、メール・フォームを自動で特定できなかった院。ページを開いて確認し、「編集」で送り先を入力するか、「選択を対象外にする」を押してください（調べ直しても結果は変わりません）。',
+  nohp:'自動検索でHPが見つからなかった院。電話番号と住所で2回探しています。HPを持っていない院が多いので、電話・Instagram向けです。心当たりがあれば行内にURLを貼り、不要なら「選択を対象外にする」を押してください。',
   excluded:'窓口がない・送らないと決めた院。IG DM／テレアポに回してください。',
   dup:'同じHPで電話番号も同じ（または空欄）の院です。同じ院に2回送らないよう、残す1行を選んでください。残さない行は「送らない」になります（あとで戻せます）。',
   all:'すべての院。「編集」からHP・電話・送り先・メモを直せます。',
@@ -369,10 +371,14 @@ function stageOf(c){
   if(c.status==='NG') return 'excluded';
   if(!c.hp_url){
     const f = c.research && c.research.findhp;
-    return (f && f.url && !f.rejected) ? 'confirm' : 'find';
+    if(f && f.url && !f.rejected) return 'confirm';
+    // 自動検索しても見つからなかった院は「HPを探す」から分ける（同じ院を何度も検索しないため）
+    return f ? 'nohp' : 'find';
   }
   if(!(c.email || c.form_url)){
-    return ['未対応','取得失敗'].includes(c.send_channel) ? 'excluded' : 'research';
+    if(['未対応','取得失敗'].includes(c.send_channel)) return 'excluded';
+    // 調査済みで「要目視」の院は、調べ直しても結果が変わらないので専用タブへ
+    return c.send_channel === '要目視' ? 'visual' : 'research';
   }
   if(!(c.gen && c.gen.result)) return 'write';
   if(!c.factcheck) return 'verify';
@@ -610,6 +616,8 @@ function renderPrep(){
   let btns = '';
   if(st==='find') btns += `<button class="primary mini" data-batch="hp"${dis}>選択をHP補完</button>`;
   if(st==='research') btns += `<button class="primary mini" data-batch="res"${dis}>選択を導線調査</button>`;
+  if(st==='nohp')   btns += `<button class="mini" data-batch="hp"${dis}>選択をもう一度HP補完</button><button class="mini" data-batch="giveup">選択を対象外にする</button>`;
+  if(st==='visual') btns += `<button class="mini" data-batch="nowindow">選択を対象外にする（窓口なし）</button>`;
   btns += `<button class="mini" data-batch="csvin">CSV取込</button><button class="mini" data-batch="csvout">CSV書き出し</button>`;
   const snap = snapshotPrep();
   $('tb_prep').innerHTML = toolbar('prep', btns, NOTE[st]);
@@ -667,6 +675,12 @@ function prepRow(c){
   const warn = c.research && Array.isArray(c.research.evidence) && c.research.evidence.find(x=>/⚠/.test(x));
   if(warn) dest += `<div class="sm" style="color:var(--warn)">${esc(warn)}</div>`;
   if(st==='research') dest += `<div style="margin-top:4px"><button class="mini" data-act="res1" data-id="${c.id}">調査</button></div>`;
+  if(st==='visual'){
+    // 目で確認：問い合わせページを開いて、送り先を「編集」で入れてもらう
+    const cp = (c.research && c.research.contact_pages) || [];
+    dest += `<div class="sm" style="margin-top:4px">${cp.slice(0,3).map(u=>`<a href="${esc(u)}" target="_blank" rel="noopener">問い合わせページを開く</a>`).join(' ・ ') || '問い合わせページの記録なし'}</div>
+      <div style="margin-top:4px"><button class="primary mini" data-act="edit" data-id="${c.id}">送り先を入力</button><button class="mini" data-act="res1" data-id="${c.id}">調べ直す</button></div>`;
+  }
   let ops = `<button class="mini" data-act="edit" data-id="${c.id}">${editId===c.id?'閉じる':'編集'}</button>`;
   if(c.status==='NG') ops += `<div style="margin-top:4px"><button class="mini" data-act="revive" data-id="${c.id}">戻す</button></div>`;
   const stPill = sub.prep==='all' ? `<div style="margin-top:2px"><span class="pill ${st==='send'?'':(['fix','excluded'].includes(st)?'bad':'dim')}">${esc(PAGES[pageOf(st)].label.slice(0,1))} ${esc(STAGE_LABEL[st])}</span></div>` : '';
@@ -1510,6 +1524,19 @@ async function runBatch(p, label, items, fn, doneMsg){
       const n = ch => items.filter(c=>c.send_channel===ch).length;
       return `内訳：メール ${n('メール')}件・フォーム ${n('フォーム')}件（「② 文面・検証」へ）／要目視 ${n('要目視')}件（このタブに残ります。HPを開いて確認→「編集」で入力）／窓口なし ${n('未対応')+n('取得失敗')}件（「対象外」へ）。`;
     });
+    // 対象外にする：HPが見つからない院は「送らない」、要目視の院は「窓口なし」にして対象外タブへ
+    if(k==='giveup' || k==='nowindow'){
+      const label = k==='giveup' ? 'HPが見つからないため対象外にする' : '窓口なしとして対象外にする';
+      if(!S.length || !confirm(`${S.length}件を対象外にします（あとで「すべて」タブから戻せます）。よろしいですか？`)) return;
+      runBatch(p, label, S, async c=>{
+        const patch = k==='giveup'
+          ? { status:'NG', ng:true, ng_reason:'HPが見つからないため（電話・IG向け）' }
+          : { send_channel:'未対応' };
+        const { error } = await sb.from('clinics').update(patch).eq('id', c.id);
+        if(error) throw new Error(error.message);
+        Object.assign(c, patch);
+      }, '「対象外」へ移りました。');
+    }
     if(k==='gen')   runBatch(p, 'AI生成', S.filter(c=>c.hp_url), c=>runPipeline(c), '次は「検証する」タブでファクトチェック。');
     if(k==='regen'){ if(S.length && confirm(S.length+'件の文面を作り直します（集めた材料はそのまま使います）。手直しした内容は消えます。よろしいですか？')) runBatch(p, 'AI作り直し', S.filter(c=>c.hp_url), async c=>{ await resetWrite(c); await runPipeline(c); }, '次は「検証する」タブでファクトチェック。'); }
     if(k==='okfix'){ const t = S.filter(c=>c.factcheck && c.factcheck.verdict!=='OK');
