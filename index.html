@@ -1516,6 +1516,19 @@ const AUTO_SEC  = { hp:7, res:5, gen:150, fact:60 };             // 1院あた�
 const AUTO_STEP = { hp:'HPを探す', res:'送り先を調べる', gen:'文面をつくる', fact:'検証する' };
 let AUTO = null;                                                  // 実行中の状態（null＝止まっている）
 let AUTO_LAST = '';                                               // 直前の実行の結果（画面に残す）
+let AUTO_LAST_ROWS = [];                                          // 直前の実行で触った院と、その行き先
+// 自動運転で処理した院が、いまどの工程にいるか（終わったあとに「あの5件はどうなった？」を出すため）
+const AUTO_RESULT = [
+  ['send',    '送れる状態になった（③送信）'],
+  ['verify',  '検証まち（②文面・検証）'],
+  ['write',   '文面まち（②文面・検証）'],
+  ['fix',     '検証で指摘あり → 人が直す'],
+  ['research','送り先を調べるの途中'],
+  ['confirm', 'HPの候補あり → 人が採用/却下'],
+  ['visual',  '目で確認（送り先を特定できず）'],
+  ['nohp',    'HPが見つからず（サイトが無い院）'],
+  ['excluded','窓口なし → 対象外'],
+];
 let autoForm = { goal:'letters', n:10, yen:1500, finishFirst:true, open:false };
 try{ const v = JSON.parse(localStorage.getItem('mirabon_auto')||'null'); if(v) Object.assign(autoForm, v, { open:false }); }catch(e){}
 
@@ -1567,7 +1580,9 @@ function renderAuto(){
         <button class="primary mini" id="autoOpen">自動で進める</button>
       </div>
       <div class="status">いまの残り：HPを探す ${q.hp.length}件・送り先を調べる ${q.res.length}件・文面 ${q.gen.length}件・検証 ${q.fact.length}件　／　送れる状態 ${c.sendable}件</div>
-      ${AUTO_LAST ? `<div class="status" style="color:var(--accent-ink)">${esc(AUTO_LAST)}</div>` : ''}`;
+      ${AUTO_LAST ? `<div class="status" style="color:var(--accent-ink)">${esc(AUTO_LAST)}</div>` : ''}
+      ${AUTO_LAST_ROWS.length ? `<div class="status"><b>今回処理した院の行き先</b>${AUTO_LAST_ROWS.map(g=>
+        `<div style="margin-top:3px">・${esc(g.label)} <b>${g.names.length}件</b>：${esc(g.names.slice(0,8).join(' ／ '))}${g.names.length>8?` ほか${g.names.length-8}件`:''}</div>`).join('')}</div>` : ''}`;
     $('autoOpen').onclick = ()=>{ autoForm.open = true; renderAuto(); };
     return;
   }
@@ -1666,6 +1681,12 @@ async function autoRun(){
   const why = AUTO.errs.length ? `／失敗 ${AUTO.ng}件：${[...new Set(AUTO.errs)].slice(0,2).join('、')}` : (AUTO.ng ? `／失敗 ${AUTO.ng}件` : '');
   const sum = `自動運転 終了：${reason}。送れる文面 ${made}件（合計 ${c.sendable}件）／リスト ${AUTO.consumed}件を消費／${time}／概算 ${Math.round(autoSpent())}円` +
     why + (c.waitingHuman ? `／人の確認待ち ${c.waitingHuman}件（HPを確認・目で確認・直す）` : '');
+  // 触った院の行き先をまとめる（失敗した院は理由つきで別枠）
+  const touched = clinics.filter(x=>AUTO.mine.has(x.id));
+  const failed = new Set(AUTO.errs.map(m=>(m.match(/「(.+?)」/)||[])[1]).filter(Boolean));
+  AUTO_LAST_ROWS = AUTO_RESULT.map(([st, label])=>({ label, names: touched.filter(x=>stageOf(x)===st && !failed.has(x.name)).map(x=>x.name) }))
+    .filter(g=>g.names.length);
+  if(failed.size) AUTO_LAST_ROWS.push({ label:'失敗（もう一度押せばやり直せます）', names:[...failed] });
   AUTO = null; AUTO_LAST = sum; busy.prep = false; busy.write = false;
   bmsg.prep = sum; renderAll(); toast('自動運転が終わりました');
 }
