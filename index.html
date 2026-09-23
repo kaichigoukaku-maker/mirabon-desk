@@ -82,6 +82,17 @@ main.split > .pane{overflow-y:auto}
 .subtabs button{border:none;border-radius:0;padding:6px 14px;font-size:12.5px}
 .subtabs button.on{background:var(--accent);color:#fff;font-weight:700}
 .subtabs button .n{margin-left:6px;font-size:11px;opacity:.8}
+/* だれがやる工程か：AI＝緑／人＝オレンジ。タブの上端に色の線を出す */
+.subtabs button{border-top:3px solid transparent}
+.subtabs button.w-ai{border-top-color:var(--accent)}
+.subtabs button.w-me{border-top-color:var(--warn)}
+.subtabs button.on.w-me{background:var(--warn);color:#fff}
+.who{display:inline-block;font-size:10px;font-weight:700;padding:0 5px;margin-left:5px;border-radius:99px;vertical-align:1px}
+.who.ai{background:var(--accent-weak);color:var(--accent-ink)}
+.who.me{background:var(--warn-weak);color:var(--warn)}
+.subtabs button.on .who{background:rgba(255,255,255,.25);color:#fff}
+.legend{font-size:11.5px;color:var(--sub);margin-top:6px}
+.legend .who{margin-left:0;margin-right:4px}
 .btns{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;align-items:center}
 .status{font-size:12.5px;color:var(--sub);margin:8px 0}
 .status b{color:var(--accent-ink)}
@@ -348,6 +359,13 @@ const STAGE_LABEL = {
   write:'文面を作る', verify:'検証する', fix:'直す',
   send:'送る', waiting:'返事待ち', result:'返信・結果',
 };
+// その工程をだれが進めるか（ai＝ボタン1つでAIが処理／me＝人が見て決める）
+const WHO = {
+  find:'ai', research:'ai', write:'ai', verify:'ai',
+  confirm:'me', visual:'me', fix:'me', send:'me', dup:'me', waiting:'me', result:'me',
+  nohp:'none', excluded:'none', all:'none',
+};
+const WHO_LABEL = { ai:'AI', me:'人' };
 const NOTE = {
   find:'HPが見つかっていない院。「選択をHP補完」で自動検索し、見つからない院は行内にURLを貼ってください。',
   confirm:'自動検索で候補は出たが確証がない院。リンクを開いて確かめ、採用／却下してください。',
@@ -563,8 +581,11 @@ const TOPN = 150;      // 「上位○件を選択」の件数（1日に流す�
 const SHOW_MAX = 300;  // 一覧に描く最大行数（数万件を全部描くと固まる。選択・一括処理は描いていない行も対象）
 function moreNote(n){ return n > SHOW_MAX ? `<div class="status" style="margin-top:6px">先頭${SHOW_MAX}件を表示中（全${n.toLocaleString()}件）。「上位${TOPN}件を選択」「表示中を全選択」は表示していない行も含めて選びます</div>` : ''; }
 function toolbar(p, btnsHTML, note){
-  const tabs = PAGES[p].tabs.map(st=>
-    `<button data-sub="${st}" class="${sub[p]===st?'on':''}">${STAGE_LABEL[st]}<span class="n">${stageList(st).length}</span></button>`).join('');
+  const tabs = PAGES[p].tabs.map(st=>{
+    const w = WHO[st] || 'none';
+    const cls = [sub[p]===st?'on':'', w==='ai'?'w-ai':w==='me'?'w-me':''].filter(Boolean).join(' ');
+    return `<button data-sub="${st}" class="${cls}">${STAGE_LABEL[st]}${w==='none'?'':`<span class="who ${w}">${WHO_LABEL[w]}</span>`}<span class="n">${stageList(st).length}</span></button>`;
+  }).join('');
   const depts = [...new Set(clinics.flatMap(c=>deptTokens(c.department)))].sort();
   const vis = curList(); const nSel = vis.filter(c=>selIds.has(c.id)).length;
   return `
@@ -573,6 +594,7 @@ function toolbar(p, btnsHTML, note){
       <select class="fdept" style="width:auto;padding:5px 8px;font-size:12px"><option value="">診療科：すべて</option>${depts.map(d=>`<option${filt.dept===d?' selected':''}>${esc(d)}</option>`).join('')}</select>
       <label class="inl"><input type="checkbox" class="fstar" ${filt.star?'checked':''} style="vertical-align:-2px"> ★だけ</label>
     </div>
+    <div class="legend"><span class="who ai">AI</span>ボタンを押すとAIがまとめて処理します　<span class="who me">人</span>中身を見て決める工程です（印のないタブは記録用で、作業はありません）</div>
     ${btnsHTML===null ? '' : `<div class="btns">
       <label class="inl"><input type="checkbox" class="cball" style="vertical-align:-2px"> 表示中を全選択</label>
       ${vis.length > TOPN ? `<button class="mini cbtop" title="この一覧の上から${TOPN}件を選択（取り込んだ順）">上位${TOPN}件を選択</button>` : ''}
