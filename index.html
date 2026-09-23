@@ -1523,8 +1523,11 @@ function autoQueue(){
   // 途中まで進んだ院を先に仕上げてから、新しい院に手を付ける（ゴールに最短で届く順）
   // 「途中の院を先に仕上げる」を外した時は、この実行で取り出した院だけを進める
   const mine = AUTO && !AUTO.finishFirst ? AUTO.mine : null;
-  const by = st => clinics.filter(c=>stageOf(c)===st && (!mine || mine.has(c.id)));
-  return { fact:by('verify'), gen:by('write'), res:by('research'), hp:clinics.filter(c=>stageOf(c)==='find') };
+  // 2回続けて失敗した院は、この実行ではもう選ばない（同じ院で延々とやり直さないため）
+  const skip = AUTO ? AUTO.skip : null;
+  const ok = c => (!mine || mine.has(c.id)) && !(skip && skip.has(c.id));
+  const by = st => clinics.filter(c=>stageOf(c)===st && ok(c));
+  return { fact:by('verify'), gen:by('write'), res:by('research'), hp:clinics.filter(c=>stageOf(c)==='find' && !(skip && skip.has(c.id))) };
 }
 function autoCounts(){
   const n = st => clinics.filter(c=>stageOf(c)===st).length;
@@ -1609,7 +1612,7 @@ function renderAuto(){
 
 async function autoRun(){
   AUTO = { goal:autoForm.goal, target:autoForm.n, yen:autoForm.yen, finishFirst:autoForm.finishFirst,
-           t0:Date.now(), stop:false, now:'', ng:0, fails:0, mine:new Set(),
+           t0:Date.now(), stop:false, now:'', ng:0, fails:0, mine:new Set(), errs:[], skip:new Set(), tries:{},
            consumed:0, done:{hp:0,res:0,gen:0,fact:0}, base:autoCounts() };
   busy.prep = true; busy.write = true; renderAll();
   const RUN = { hp:hpOne, res:researchOne, gen:c=>runPipeline(c), fact:c=>runFact(c) };
@@ -1645,6 +1648,10 @@ async function autoRun(){
             try{ await RUN[step](c); AUTO.done[step]++; AUTO.fails = 0; if(step==='hp') AUTO.consumed++; continue; }catch(e2){ /* 下で失敗として数える */ }
           }
           AUTO.ng++; AUTO.fails++; AUTO.mine.add(c.id);
+          AUTO.tries[c.id] = (AUTO.tries[c.id] || 0) + 1;
+          if(AUTO.tries[c.id] >= 2) AUTO.skip.add(c.id);     // 2回失敗したら、この実行では飛ばす
+          const msg = `${AUTO_STEP[step]}「${c.name}」：${(e.message||e).toString().slice(0,120)}`;
+          AUTO.errs.push(msg); console.warn('自動運転の失敗:', msg);
           if(step === 'hp') AUTO.consumed++;   // 見つからなかった院もリストは消費している
         }
         renderAuto();
@@ -1653,9 +1660,12 @@ async function autoRun(){
     renderAll({ keepDetail:true });
   }
   if(AUTO.stop) reason = '止めました';
-  const c = autoCounts(), made = c.sendable - AUTO.base.sendable, min = Math.round((Date.now()-AUTO.t0)/60000);
-  const sum = `自動運転 終了：${reason}。送れる文面 ${made}件（合計 ${c.sendable}件）／リスト ${AUTO.consumed}件を消費／${min}分／概算 ${Math.round(autoSpent())}円` +
-    (AUTO.ng ? `／失敗 ${AUTO.ng}件` : '') + (c.waitingHuman ? `／人の確認待ち ${c.waitingHuman}件（HPを確認・目で確認・直す）` : '');
+  const c = autoCounts(), made = c.sendable - AUTO.base.sendable, sec = Math.round((Date.now()-AUTO.t0)/1000);
+  const time = sec < 90 ? `${sec}秒` : `${Math.round(sec/60)}分`;
+  // 失敗は理由まで出す（件数だけだと原因が分からない）
+  const why = AUTO.errs.length ? `／失敗 ${AUTO.ng}件：${[...new Set(AUTO.errs)].slice(0,2).join('、')}` : (AUTO.ng ? `／失敗 ${AUTO.ng}件` : '');
+  const sum = `自動運転 終了：${reason}。送れる文面 ${made}件（合計 ${c.sendable}件）／リスト ${AUTO.consumed}件を消費／${time}／概算 ${Math.round(autoSpent())}円` +
+    why + (c.waitingHuman ? `／人の確認待ち ${c.waitingHuman}件（HPを確認・目で確認・直す）` : '');
   AUTO = null; AUTO_LAST = sum; busy.prep = false; busy.write = false;
   bmsg.prep = sum; renderAll(); toast('自動運転が終わりました');
 }
@@ -1675,7 +1685,7 @@ async function runBatch(p, label, items, fn, doneMsg){
       const c = items[next++];
       try{ await fn(c); done++; }
       catch(e){
-        if(/429|混み合|rate/i.test(e.message||'')){
+        if(/429|503|混み合|混雑|rate|overload/i.test(e.message||'')){
           await new Promise(r=>setTimeout(r, 25000));
           try{ await fn(c); done++; }catch(e2){ ng++; errs.push(c.name+': '+e2.message); }
         }else{ ng++; errs.push(c.name+': '+e.message); }
