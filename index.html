@@ -247,6 +247,7 @@ table.stat th{font-size:11px;color:var(--sub);border-top:none}
 
 <!-- ① リスト整備 -->
 <main id="pPrep" class="single">
+  <section class="pane wide" id="autoBox" style="margin-bottom:12px"></section>
   <section class="pane wide">
     <div class="listhead" id="tb_prep"></div>
     <div id="prepBody"></div>
@@ -634,6 +635,7 @@ function toggleSel(cb, p){ cb.checked ? selIds.add(cb.dataset.id) : selIds.delet
 
 /* ============ ① リスト整備 ============ */
 function renderPrep(){
+  renderAuto();
   const st = sub.prep, list = curList(), dis = busy.prep ? ' disabled' : '';
   let btns = '';
   if(st==='find') btns += `<button class="primary mini" data-batch="hp"${dis}>選択をHP補完</button>`;
@@ -1501,6 +1503,150 @@ async function hpOne(c){
   const { error } = await sb.from('clinics').update(patch).eq('id', c.id);
   if(error) throw new Error(error.message);
   Object.assign(c, patch);
+}
+
+/* ============ 自動で進める（ゴールを決めて、AIの工程を人の代わりに順に押す） ============
+   進める工程は緑（AI）の4つだけ：HPを探す → 送り先を調べる → 文面をつくる → 検証する。
+   オレンジ（人）の工程（HPを確認・目で確認・直す）と送信には触らず、終わったときに件数だけ報告する。 */
+const AUTO_COST = { hp:0.3, res:0.15, gen:10, fact:5 };          // 1院あたりの概算費用（円）。実測から
+const AUTO_SEC  = { hp:7, res:5, gen:150, fact:60 };             // 1院あたりの概算時間（秒）
+const AUTO_STEP = { hp:'HPを探す', res:'送り先を調べる', gen:'文面をつくる', fact:'検証する' };
+let AUTO = null;                                                  // 実行中の状態（null＝止まっている）
+let AUTO_LAST = '';                                               // 直前の実行の結果（画面に残す）
+let autoForm = { goal:'letters', n:10, yen:1500, finishFirst:true, open:false };
+try{ const v = JSON.parse(localStorage.getItem('mirabon_auto')||'null'); if(v) Object.assign(autoForm, v, { open:false }); }catch(e){}
+
+function autoQueue(){
+  // 途中まで進んだ院を先に仕上げてから、新しい院に手を付ける（ゴールに最短で届く順）
+  // 「途中の院を先に仕上げる」を外した時は、この実行で取り出した院だけを進める
+  const mine = AUTO && !AUTO.finishFirst ? AUTO.mine : null;
+  const by = st => clinics.filter(c=>stageOf(c)===st && (!mine || mine.has(c.id)));
+  return { fact:by('verify'), gen:by('write'), res:by('research'), hp:clinics.filter(c=>stageOf(c)==='find') };
+}
+function autoCounts(){
+  const n = st => clinics.filter(c=>stageOf(c)===st).length;
+  return { sendable:n('send'), waitingHuman:n('confirm')+n('visual')+n('fix') };
+}
+function autoGoalLeft(){
+  if(!AUTO) return 0;
+  return AUTO.goal==='letters' ? Math.max(0, AUTO.target - (autoCounts().sendable - AUTO.base.sendable))
+                               : Math.max(0, AUTO.target - AUTO.consumed);
+}
+function autoSpent(){ return AUTO ? Object.entries(AUTO.done).reduce((a,[k,v])=>a+v*AUTO_COST[k],0) : 0; }
+
+function renderAuto(){
+  const box = $('autoBox');
+  const q = autoQueue(), c = autoCounts();
+  if(AUTO){
+    const min = Math.round((Date.now()-AUTO.t0)/60000);
+    const left = autoGoalLeft();
+    const eta = AUTO.goal==='letters'
+      ? Math.round(left * (AUTO_SEC.gen + AUTO_SEC.fact + (AUTO_SEC.hp + AUTO_SEC.res) / 0.12) / 60 / CONC)
+      : Math.round(left * (AUTO_SEC.hp + AUTO_SEC.res) / 60 / CONC);
+    box.innerHTML = `
+      <div class="btns" style="margin-top:0;justify-content:space-between">
+        <b>自動で進めています：${AUTO.goal==='letters' ? `送れる文面 ${AUTO.target}件` : `リスト ${AUTO.target}件の消費`}</b>
+        <button class="mini" id="autoStop">止める</button>
+      </div>
+      <div class="status">いま：${esc(AUTO.now || '準備中')}　／　残り ${left}${AUTO.goal==='letters'?'件の文面':'件'}　／　経過 ${min}分（残り およそ${eta}分）　／　概算 ${Math.round(autoSpent())}円</div>
+      <div class="status">できた内訳：HP ${AUTO.done.hp}件・送り先 ${AUTO.done.res}件・文面 ${AUTO.done.gen}件・検証 ${AUTO.done.fact}件${AUTO.ng?`　／　失敗 ${AUTO.ng}件`:''}</div>
+      <div class="note">送信は自動化しません。人の確認待ちは${c.waitingHuman}件たまっています（終わったあとに見てください）。このタブを閉じると止まります。</div>`;
+    $('autoStop').onclick = ()=>{ AUTO.stop = true; AUTO.now = '止めています（進行中の院が終わるまで待ちます）'; renderAuto(); };
+    return;
+  }
+  if(!autoForm.open){
+    box.innerHTML = `
+      <div class="btns" style="margin-top:0;justify-content:space-between">
+        <div><b>自動で進める</b>　<span class="sm">ゴールを決めると、AIの工程（HPを探す→送り先を調べる→文面→検証）を順に回します</span></div>
+        <button class="primary mini" id="autoOpen">自動で進める</button>
+      </div>
+      <div class="status">いまの残り：HPを探す ${q.hp.length}件・送り先を調べる ${q.res.length}件・文面 ${q.gen.length}件・検証 ${q.fact.length}件　／　送れる状態 ${c.sendable}件</div>
+      ${AUTO_LAST ? `<div class="status" style="color:var(--accent-ink)">${esc(AUTO_LAST)}</div>` : ''}`;
+    $('autoOpen').onclick = ()=>{ autoForm.open = true; renderAuto(); };
+    return;
+  }
+  const leftover = { n:q.gen.length+q.fact.length+q.res.length,
+    yen: Math.round(q.gen.length*AUTO_COST.gen + q.fact.length*AUTO_COST.fact + q.res.length*AUTO_COST.res),
+    min: Math.round((q.gen.length*AUTO_SEC.gen + q.fact.length*AUTO_SEC.fact + q.res.length*AUTO_SEC.res)/60/CONC) };
+  const est = autoForm.goal==='letters'
+    ? { n: Math.round(autoForm.n/0.12), yen: Math.round(autoForm.n*(AUTO_COST.gen+AUTO_COST.fact) + autoForm.n/0.12*(AUTO_COST.hp+AUTO_COST.res)), min: Math.round(autoForm.n*(AUTO_SEC.gen+AUTO_SEC.fact)/60/CONC + autoForm.n/0.12*(AUTO_SEC.hp+AUTO_SEC.res)/60/CONC) }
+    : { n: autoForm.n, yen: Math.round(autoForm.n*(AUTO_COST.hp+AUTO_COST.res) + autoForm.n*0.12*(AUTO_COST.gen+AUTO_COST.fact)), min: Math.round(autoForm.n*(AUTO_SEC.hp+AUTO_SEC.res)/60/CONC + autoForm.n*0.12*(AUTO_SEC.gen+AUTO_SEC.fact)/60/CONC) };
+  box.innerHTML = `
+    <div class="btns" style="margin-top:0"><b>自動で進める：ゴールを決めてください</b></div>
+    <div class="btns">
+      <label class="inl"><input type="radio" name="autogoal" value="letters" ${autoForm.goal==='letters'?'checked':''}> 送れる文面を</label>
+      <label class="inl"><input type="radio" name="autogoal" value="consume" ${autoForm.goal==='consume'?'checked':''}> リストを</label>
+      <input type="number" id="autoN" value="${autoForm.n}" min="1" max="2000" style="width:90px;padding:5px 8px;font-size:13px">
+      <span class="sm">${autoForm.goal==='letters' ? '件つくるまで' : '件消費するまで'}</span>
+      <span class="sm">／ 上限</span><input type="number" id="autoYen" value="${autoForm.yen}" min="100" max="20000" step="100" style="width:100px;padding:5px 8px;font-size:13px"><span class="sm">円で止める</span>
+      <label class="inl" title="前回の途中で終わった院を、新しい院より先に仕上げます"><input type="checkbox" id="autoFF" ${autoForm.finishFirst?'checked':''} style="vertical-align:-2px"> 途中の院を先に仕上げる</label>
+      <button class="primary mini" id="autoGo">開始</button>
+      <button class="mini" id="autoCancel">やめる</button>
+    </div>
+    <div class="status">見込み：リスト ${est.n.toLocaleString()}件を消費／およそ ${est.min}分／API費用 およそ ${est.yen.toLocaleString()}円（同時${CONC}件のとき）</div>
+    ${leftover.n && autoForm.finishFirst ? `<div class="status" style="color:var(--warn)">先に、途中まで進んでいる院を仕上げます：送り先 ${q.res.length}件・文面 ${q.gen.length}件・検証 ${q.fact.length}件（およそ ${leftover.yen.toLocaleString()}円・${leftover.min}分）。チェックを外すと、今回取り出した院だけを進めます。</div>` : ''}
+    <div class="note">${autoForm.goal==='letters'
+      ? '送り先が見つかるのは調べた院の約12%なので、文面1件あたり8件ほどリストを使います。'
+      : '取り出した院は、送り先が見つかれば文面と検証まで進めます。'}　人の確認が要る院（HPを確認・目で確認）は飛ばして、最後に件数を報告します。</div>`;
+  box.querySelectorAll('input[name=autogoal]').forEach(r=>r.onchange=()=>{ autoForm.goal = r.value; renderAuto(); });
+  $('autoN').onchange = e=>{ autoForm.n = Math.max(1, Math.min(2000, +e.target.value||1)); renderAuto(); };
+  $('autoYen').onchange = e=>{ autoForm.yen = Math.max(100, +e.target.value||1500); renderAuto(); };
+  $('autoFF').onchange = e=>{ autoForm.finishFirst = e.target.checked; renderAuto(); };
+  $('autoCancel').onclick = ()=>{ autoForm.open = false; renderAuto(); };
+  $('autoGo').onclick = ()=>{ autoForm.open = false; try{ localStorage.setItem('mirabon_auto', JSON.stringify({ goal:autoForm.goal, n:autoForm.n, yen:autoForm.yen, finishFirst:autoForm.finishFirst })); }catch(e){} autoRun(); };
+}
+
+async function autoRun(){
+  AUTO = { goal:autoForm.goal, target:autoForm.n, yen:autoForm.yen, finishFirst:autoForm.finishFirst,
+           t0:Date.now(), stop:false, now:'', ng:0, fails:0, mine:new Set(),
+           consumed:0, done:{hp:0,res:0,gen:0,fact:0}, base:autoCounts() };
+  busy.prep = true; busy.write = true; renderAll();
+  const RUN = { hp:hpOne, res:researchOne, gen:c=>runPipeline(c), fact:c=>runFact(c) };
+  let reason = 'ゴールに届きました';
+  while(!AUTO.stop){
+    if(autoSpent() >= AUTO.yen){ reason = `上限の${AUTO.yen}円に達したので止めました`; break; }
+    if(AUTO.fails >= 5){ reason = '5件続けて失敗したので止めました（APIの状態を確認してください）'; break; }
+    const left = autoGoalLeft(), q = autoQueue();
+    // 文面がゴールなら、届いた時点で終わり。リスト消費がゴールなら、取り出した院を最後まで仕上げてから終わる
+    if(left <= 0 && AUTO.goal === 'letters') break;
+    let step = ['fact','gen','res'].find(k=>q[k].length) || '';
+    if(!step){
+      if(left <= 0) break;
+      if(!q.hp.length){ reason = '進められる院がなくなりました（リストを追加してください）'; break; }
+      step = 'hp';
+    }
+    let size = step==='hp' || step==='res' ? Math.max(CONC*5, 10) : CONC;
+    if(step === 'hp' && AUTO.goal === 'consume') size = Math.min(size, left);   // 指定より多く取り出さない
+    const wave = q[step].slice(0, size);
+    AUTO.now = `${AUTO_STEP[step]}（${wave.length}件）`;
+    renderAuto();
+    let i = 0;
+    await Promise.all(Array.from({ length: Math.min(CONC, wave.length) }, async ()=>{
+      while(i < wave.length && !AUTO.stop){
+        const c = wave[i++];
+        try{
+          await RUN[step](c);
+          AUTO.done[step]++; AUTO.fails = 0; AUTO.mine.add(c.id);
+          if(step === 'hp') AUTO.consumed++;
+        }catch(e){
+          if(/429|混み合|rate|503|混雑/i.test(e.message||'')){
+            await new Promise(r=>setTimeout(r, 20000));
+            try{ await RUN[step](c); AUTO.done[step]++; AUTO.fails = 0; if(step==='hp') AUTO.consumed++; continue; }catch(e2){ /* 下で失敗として数える */ }
+          }
+          AUTO.ng++; AUTO.fails++; AUTO.mine.add(c.id);
+          if(step === 'hp') AUTO.consumed++;   // 見つからなかった院もリストは消費している
+        }
+        renderAuto();
+      }
+    }));
+    renderAll({ keepDetail:true });
+  }
+  if(AUTO.stop) reason = '止めました';
+  const c = autoCounts(), made = c.sendable - AUTO.base.sendable, min = Math.round((Date.now()-AUTO.t0)/60000);
+  const sum = `自動運転 終了：${reason}。送れる文面 ${made}件（合計 ${c.sendable}件）／リスト ${AUTO.consumed}件を消費／${min}分／概算 ${Math.round(autoSpent())}円` +
+    (AUTO.ng ? `／失敗 ${AUTO.ng}件` : '') + (c.waitingHuman ? `／人の確認待ち ${c.waitingHuman}件（HPを確認・目で確認・直す）` : '');
+  AUTO = null; AUTO_LAST = sum; busy.prep = false; busy.write = false;
+  bmsg.prep = sum; renderAll(); toast('自動運転が終わりました');
 }
 
 /* ============ 一括処理（1件ずつ独立。同時に処理する件数は画面で選べる。Kimiの混雑時だけ25秒おいて再試行） ============ */
