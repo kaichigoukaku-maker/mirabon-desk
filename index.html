@@ -1455,7 +1455,15 @@ async function runFact(c, onStep){
   }
   const claimParts = c.pipe.fc_claims ? [c.pipe.fc_claims] : FC_SLOTS.map(([k])=>c.pipe[k]).filter(Boolean);
   const fc = mergeFact(claimParts, c.pipe.fc_meta);
-  if(!(await upd(c, { factcheck: fc }))) throw new Error('検証結果を保存できませんでした');
+  // 院長名がHPに載っていなかった院は、宛名を「院長先生」に切り替える（名前を書かなければ間違えようがない）。
+  // 文面本体は宛名を含まないので、作り直しは不要。元の名前はメモに残す
+  const patch = { factcheck: fc };
+  if(fc.address && fc.address.action === 'no_name' && c.director_name){
+    patch.director_name = '';
+    patch.notes = [c.notes, `リストの院長名「${c.director_name}」はHPに記載が無いため、宛名を「院長先生」にしました（${nowIso().slice(0,10)}）`].filter(Boolean).join(' ／ ');
+    patch.research = Object.assign({}, c.research||{}, { director_from_list: c.director_name });
+  }
+  if(!(await upd(c, patch))) throw new Error('検証結果を保存できませんでした');
   return fc;
 }
 async function resetFact(c){ c.pipe = c.pipe || {}; ['fc_claims','fc_you','fc_now','fc_ka','fc_meta'].forEach(k=>delete c.pipe[k]); await savePipe(c); }
