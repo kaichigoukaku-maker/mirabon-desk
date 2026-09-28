@@ -821,6 +821,18 @@ async function saveEdit(c, tr){
   toast('保存しました' + (np!=='prep' ? `（→ ${PAGES[np].label}「${STAGE_LABEL[ns]}」へ）` : (sub.prep!=='all' && ns!==sub.prep ? `（→「${STAGE_LABEL[ns]}」へ）` : '')));
   renderAll();
 }
+/* HP補完の「正式名称」で院名を上書きしてよいか。壊れた名前（2026-09-25「いな表现: いなもと眼科」）なら空＝リストの院名のまま。
+   _shared/official_name.js と同じ判定。変えるときは両方そろえる */
+function safeOfficialName(candidate, listName){
+  const name = typeof candidate === 'string' ? candidate.trim() : '';
+  if(!name || name.length > 40) return '';
+  if(/[:：;；|｜/\\<>{}「」【】"\u0000-\u001f\u007f가-힯Ѐ-ӿ฀-๿؀-ۿ�]/u.test(name)) return '';
+  if(/[现这们说时对发实经过还问题该应样种为从关么吗长门车东见书买卖认让记设读写谈论际选钱铁电网边达运进远连图团围园场处备复页项顾题额风飞马鸟鱼龙师归变战难]/u.test(name)) return '';
+  const core = s=>(s||'').replace(/医療法人[^\s　]*|社団|財団|一般|クリニック|医院|病院|診療所/g,'').replace(/[\s　・()（）]/g,'').toLowerCase();
+  const a = core(name), b = core(listName);
+  if(a.length>=2 && b.length>=2 && !a.includes(b.slice(0,4)) && !b.includes(a.slice(0,4))) return '';
+  return name;
+}
 async function approveHp(c){
   const r = (c.research||{}).findhp || {};
   if(!r.url){ toast('候補URLがありません'); return; }
@@ -828,7 +840,7 @@ async function approveHp(c){
   if(d && !confirm(`同じHPの院「${d.name}」がすでにあります（重複の可能性）。それでも採用しますか？`)) return;
   const patch = { hp_url: r.url, src_text:null, pipe:null, gen:null, factcheck:null, research: Object.assign({}, c.research, { findhp: Object.assign({}, r, { approved:true }) }) };
   c._heavy = true; delete genCache[c.id];
-  const official = (r.official_name||'').trim();
+  const official = safeOfficialName(r.official_name, c.ig_name || c.name);
   if(official && official!==c.name && official.length<=40){ patch.ig_name = c.ig_name || c.name; patch.name = official; }
   if(await upd(c, patch)){ toast('採用しました' + (patch.name ? '（名前を正式名称に更新）' : '')); renderAll(); }
 }
@@ -1183,7 +1195,9 @@ function renderQueue(list, todayN){
   $('qSeg').onclick = e=>{ const x = e.target.closest('button'); if(!x) return; sendView = x.dataset.v; renderAll(); };
   if($('qSubj')) $('qSubj').onclick = async ()=>{ await copy(CONST.subject||''); toast('件名をコピーしました'); };
   if($('qGmail')) $('qGmail').onclick = ()=>{
-    window.open('https://mail.google.com/mail/?view=cm&to='+encodeURIComponent(c.email)+'&su='+encodeURIComponent(CONST.subject||'')+'&body='+encodeURIComponent(letter), '_blank');
+    // 送信元＝アプリのログインメール（authuser未指定だとブラウザ既定のGoogleアカウントで開く）
+    const acct = (user && user.email) ? 'authuser='+encodeURIComponent(user.email)+'&' : '';
+    window.open('https://mail.google.com/mail/?'+acct+'view=cm&to='+encodeURIComponent(c.email)+'&su='+encodeURIComponent(CONST.subject||'')+'&body='+encodeURIComponent(letter), '_blank');
   };
   $('qCopy').onclick = async ()=>{ await copy(letter); toast((form?'フォーム版':'メール版')+'をコピーしました'); };
   $('qSent').onclick = async ()=>{
@@ -1508,7 +1522,7 @@ async function hpOne(c){
   const patch = { research: Object.assign({}, c.research||{}, { findhp: Object.assign({}, r, auto ? { auto_adopted:true } : {}) }) };
   if(auto){
     patch.hp_url = r.url;
-    const official = (r.official_name||'').trim();
+    const official = safeOfficialName(r.official_name, c.ig_name || c.name);
     if(official && official!==c.name && official.length<=40){ patch.ig_name = c.ig_name || c.name; patch.name = official; }
   }
   const { error } = await sb.from('clinics').update(patch).eq('id', c.id);
