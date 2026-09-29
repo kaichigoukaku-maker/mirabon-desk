@@ -1179,7 +1179,7 @@ function renderQueue(list, todayN){
       ${form ? '' : `<div class="sm" style="margin-bottom:6px">件名：${esc(CONST.subject||'')}　<button class="mini" id="qSubj">件名をコピー</button></div>`}
       <div class="letter">${esc(letter)}</div>
       <div class="btns" style="margin-top:14px">
-        ${c.email && !form ? `<button class="primary bigbtn" id="qGmail">Gmailで下書きを開く</button>` : ''}
+        ${c.email && !form ? `<button class="primary bigbtn" id="qMailApp">メールアプリで開く</button><button class="bigbtn" id="qGmail">Gmailで開く</button>` : ''}
         ${c.form_url && form ? `<a href="${esc(c.form_url)}" target="_blank" rel="noopener"><button class="primary bigbtn">問い合わせフォームを開く</button></a>` : ''}
         <button class="bigbtn" id="qCopy">本文をコピー</button>
       </div>
@@ -1194,10 +1194,12 @@ function renderQueue(list, todayN){
   $('qNext').onclick = ()=>{ sendIdx++; sendView = null; renderAll(); };
   $('qSeg').onclick = e=>{ const x = e.target.closest('button'); if(!x) return; sendView = x.dataset.v; renderAll(); };
   if($('qSubj')) $('qSubj').onclick = async ()=>{ await copy(CONST.subject||''); toast('件名をコピーしました'); };
+  // 送信元はMacのメールアプリの「送信元アカウント」設定で決まる（mirabon@w-c.co.jp＝Xserverを設定しておく）
+  if($('qMailApp')) $('qMailApp').onclick = ()=>{
+    location.href = 'mailto:'+encodeURIComponent(c.email)+'?subject='+encodeURIComponent(CONST.subject||'')+'&body='+encodeURIComponent(letter.replace(/\r?\n/g,'\r\n'));
+  };
   if($('qGmail')) $('qGmail').onclick = ()=>{
-    // 送信元＝アプリのログインメール（authuser未指定だとブラウザ既定のGoogleアカウントで開く）
-    const acct = (user && user.email) ? 'authuser='+encodeURIComponent(user.email)+'&' : '';
-    window.open('https://mail.google.com/mail/?'+acct+'view=cm&to='+encodeURIComponent(c.email)+'&su='+encodeURIComponent(CONST.subject||'')+'&body='+encodeURIComponent(letter), '_blank');
+    window.open('https://mail.google.com/mail/?view=cm&to='+encodeURIComponent(c.email)+'&su='+encodeURIComponent(CONST.subject||'')+'&body='+encodeURIComponent(letter), '_blank');
   };
   $('qCopy').onclick = async ()=>{ await copy(letter); toast((form?'フォーム版':'メール版')+'をコピーしました'); };
   $('qSent').onclick = async ()=>{
