@@ -309,7 +309,7 @@ table.stat th{font-size:11px;color:var(--sub);border-top:none}
     <div id="afForm" class="afform"></div>
     <p style="font-size:13px;margin-top:12px"><b>最初に1回だけ：</b>下のボタンをブラウザの<b>ブックマークバーへドラッグ</b>して登録してください（ブックマークバーが出ていなければ ⌘+Shift+B）。</p>
     <div class="btns"><a id="afBm" href="#" class="afbm">📥 診ラボン自動入力</a><span class="sm">← ブックマークバーへドラッグ</span></div>
-    <p style="font-size:13px">毎回：③で「自動入力データをコピー」→「問い合わせフォームを開く」→ ブックマークの「診ラボン自動入力」を押す → 黄色と赤を確認して送信 → 完了画面を見てから「送信した」。<br><span class="sm">機能を更新したときは、ブックマークを登録し直してください。</span></p>
+    <p style="font-size:13px">毎回：③の「問い合わせフォームを開く」→ 開いたフォームでブックマークの「診ラボン自動入力」を押す → 黄色と赤を確認して送信 → 完了画面を見てから「送信した」。<br><span class="sm">機能を更新したときは、ブックマークを登録し直してください。</span></p>
     <h2 class="sec">AIの設定</h2>
     <p style="font-size:13px">文面生成＝kimi-k3、ファクトチェック・HP検索＝kimi-k2.6（生成とは別モデルで検証するため）。SupabaseのSecretsに <b>MOONSHOT_API_KEY</b> が必要です。モデルは <b>GENERATE_MODEL</b> ／ <b>FACTCHECK_MODEL</b> ／ <b>FINDHP_MODEL</b> で差し替えられます。</p>
   </div>
@@ -1252,10 +1252,11 @@ function renderQueue(list, todayN){
       <div class="letter">${esc(letter)}</div>
       <div class="btns" style="margin-top:14px">
         ${c.email && !form ? `<button class="primary bigbtn" id="qMailApp">メールアプリで開く</button><button class="bigbtn" id="qGmail">Gmailで開く</button>` : ''}
-        ${c.form_url && form ? `<button class="bigbtn" id="qFill">① 自動入力データをコピー</button><a href="${esc(c.form_url)}" target="_blank" rel="noopener"><button class="primary bigbtn">② 問い合わせフォームを開く</button></a>` : ''}
+        ${c.form_url && form ? `<button class="primary bigbtn" id="qOpenForm">問い合わせフォームを開く</button>` : ''}
         <button class="bigbtn" id="qCopy">本文をコピー</button>
       </div>
-      ${c.form_url && form ? `<div class="sm" style="margin-top:6px">③ フォームでブックマークの「診ラボン自動入力」を押す（初回は設定タブで登録）。確認画面がある時は最後まで進み、<b>完了画面を見てから</b>下の「送信した」を押す</div>` : ''}
+      ${c.form_url && form ? `<div class="sm" style="margin-top:6px">開いたフォームでブックマークの「診ラボン自動入力」を押す（初回は設定タブで登録）。確認画面がある時は最後まで進み、<b>完了画面を見てから</b>下の「送信した」を押す
+        <br><button class="mini" id="qFill" style="margin-top:4px">自動入力データをコピー</button> <span class="sm">← 上のボタン以外でフォームを開いた時だけ（貼り付けの許可を聞かれます）</span></div>` : ''}
       <div class="btns" style="margin-top:14px;padding-top:12px;border-top:1px solid var(--line)">
         <button class="primary bigbtn" id="qSent">送信した → 記録して次へ</button>
         <span style="flex:1"></span>
@@ -1274,6 +1275,13 @@ function renderQueue(list, todayN){
     window.open('https://mail.google.com/mail/?view=cm&to='+encodeURIComponent(c.email)+'&su='+encodeURIComponent(CONST.subject||'')+'&body='+encodeURIComponent(letter), '_blank');
   };
   $('qCopy').onclick = async ()=>{ await copy(letter); toast((form?'フォーム版':'メール版')+'をコピーしました'); };
+  // フォームはアプリから開く（開いたタブに自動入力データを直接渡すため。クリップボードの許可が要らない）
+  if($('qOpenForm')) $('qOpenForm').onclick = ()=>{
+    const p = fillPayload(c);
+    if(p.error) toast(p.error + '（フォームは開きます）');
+    const win = window.open(c.form_url, '_blank');
+    if(win) formTabs.push({ win, clinicId:c.id });
+  };
   if($('qFill')) $('qFill').onclick = async ()=>{
     const p = fillPayload(c);
     if(p.error){ toast(p.error); return; }
@@ -1376,6 +1384,16 @@ const SENDER_FIELDS = [['name','氏名','例：嶋崎 迦一（姓と名の間�
   ['company','会社名・団体名','例：診ラボン編集部'],['zip','郵便番号（任意）','例：150-0001'],['addr','住所（任意）','必須のフォームだけで使います']];
 function loadSender(){ try{ return JSON.parse(localStorage.getItem('mirabon_sender')||'{}')||{}; }catch(e){ return {}; } }
 function saveSender(s){ try{ localStorage.setItem('mirabon_sender', JSON.stringify(s)); }catch(e){} }
+/* アプリから開いたフォームのタブ → ブックマークレットが「データをください」と頼んでくる → そのタブ宛てにだけ返す。
+   どのタブにどの院を開いたかを覚えておき、頼んできたタブ（e.source）で照合する＝別の院のデータを渡さない */
+const formTabs = [];
+window.addEventListener('message', e=>{
+  if(!e.data || e.data.__mirabonReq !== 2) return;
+  const t = formTabs.find(x=>x.win === e.source); if(!t) return;
+  const c = clinics.find(x=>x.id === t.clinicId); if(!c) return;
+  const p = fillPayload(c);
+  e.source.postMessage(p.error ? { __mirabonRes:2, error:p.error } : { __mirabonRes:2, data:JSON.stringify(p) }, e.origin);
+});
 function fillPayload(c){
   const s = loadSender();
   const miss = ['name','email','tel'].filter(k=>!(s[k]||'').trim());
@@ -1462,11 +1480,27 @@ function mirabonFill(){
   }
   function mark(el, tier){ var c = COL[tier]; el.style.outline = '3px solid '+c[0]; el.style.outlineOffset = '1px'; if (tier!=='L') el.style.background = c[1]; }
 
+  /* データの受け取り：①このタブを開いた文面アプリに頼む（許可不要）②だめならクリップボード（許可を聞かれる）③貼り付け */
   function getPayload(cb){
     var ask = function(){ var t = window.prompt('診ラボン｜自動入力データを貼り付けてください（⌘V → Enter）',''); if (t) cb(t); };
-    if (navigator.clipboard && navigator.clipboard.readText) {
-      navigator.clipboard.readText().then(function(t){ if (t && t.indexOf('"__mirabon":2')>=0) cb(t); else ask(); })['catch'](ask);
-    } else ask();
+    var clip = function(){
+      if (navigator.clipboard && navigator.clipboard.readText) {
+        navigator.clipboard.readText().then(function(t){ if (t && t.indexOf('"__mirabon":2')>=0) cb(t); else ask(); })['catch'](ask);
+      } else ask();
+    };
+    var op = null; try { op = window.opener; } catch(e) {}
+    if (!op) { clip(); return; }
+    var done = false;
+    var onMsg = function(e){
+      if (e.source !== op || !e.data || e.data.__mirabonRes !== 2) return;
+      if (e.origin !== 'https://kaichigoukaku-maker.github.io' && e.origin !== 'null') return;
+      done = true; window.removeEventListener('message', onMsg);
+      if (e.data.error) { alert('診ラボン自動入力：' + e.data.error); return; }
+      cb(e.data.data);
+    };
+    window.addEventListener('message', onMsg);
+    try { op.postMessage({ __mirabonReq:2 }, '*'); } catch(e) {}
+    setTimeout(function(){ if (!done) { window.removeEventListener('message', onMsg); clip(); } }, 800);
   }
 
   function run(raw){ try { run2(raw); } catch(e) { alert('診ラボン自動入力でエラーが出ました（'+e.message+'）。\n「本文をコピー」で貼り付けてください。'); } }
