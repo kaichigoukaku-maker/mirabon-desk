@@ -1576,6 +1576,33 @@ function mirabonFill(){
     });
 
     var nm = (d.name||'').split(/[\s　]+/), kn = (d.kana||'').split(/[\s　]+/);
+    /* ふりがなの表記：欄の指定（ひらがな／カタカナ）→ 入力例の文字 → 項目名の書き方（フリガナ＝カタカナ、ふりがな＝ひらがな）の順で決める */
+    function toKata(t){ return t.replace(/[ぁ-ゖ]/g, function(ch){ return String.fromCharCode(ch.charCodeAt(0)+0x60); }); }
+    function toHira(t){ return t.replace(/[ァ-ヶ]/g, function(ch){ return String.fromCharCode(ch.charCodeAt(0)-0x60); }); }
+    function kanaMode(it){
+      var lab = it.lab, ph = it.el.placeholder || '';
+      if (/ひらがな/.test(lab)) return 'hira';
+      if (/カタカナ|全角カナ/.test(lab)) return 'kata';
+      if (/[ァ-ヶ]{2,}/.test(ph)) return 'kata';
+      if (/[ぁ-ゖ]{2,}/.test(ph)) return 'hira';
+      if (/フリガナ|ﾌﾘｶﾞﾅ|カナ|ｶﾅ|セイ|メイ/.test(lab)) return 'kata';
+      if (/ふりがな|せい|めい/.test(lab)) return 'hira';
+      return '';
+    }
+    /* 姓・名に分かれた欄は表記をそろえる（どれかがカタカナを指していればカタカナ） */
+    var kanaGroupMode = '';
+    function kanaFor(it, v){
+      var m = kanaGroupMode || kanaMode(it);
+      return m==='kata' ? toKata(v) : m==='hira' ? toHira(v) : v;
+    }
+    /* 都道府県：住所の先頭から読み取り、都道府県の選択欄があればそこで選ぶ（住所の欄にはそれ以降だけを入れる） */
+    var PREF = ((d.addr||'').replace(/^〒?\s*\d{3}-?\d{4}\s*/, '').match(/^(北海道|東京都|京都府|大阪府|.{2,3}県)/) || [])[0] || '';
+    var prefSel = [].slice.call(scope.querySelectorAll('select')).filter(function(sel){
+      if (!visible(sel)) return false;
+      var t = [].slice.call(sel.options).map(function(o){ return o.textContent; }).join(',');
+      return /北海道/.test(t) && /沖縄/.test(t);
+    })[0] || null;
+    var addrRest = (prefSel && PREF) ? (d.addr||'').replace(/^〒?\s*\d{3}-?\d{4}\s*/, '').slice(PREF.length).replace(/^[\s　]+/, '') : (d.addr||'');
     var telp = (d.tel||'').split(/[-－ー‐]/), zipp = (d.zip||'').split(/[-－ー‐]/);
     function splitFill(list, full, parts, label, needAll){
       if (list.length===1) return [[list[0], full]];
@@ -1599,15 +1626,16 @@ function mirabonFill(){
         list.forEach(function(it, i){ setValue(it.el, d.email); add((i===0 || /確認|再入力|confirm|again/i.test(it.lab)) ? 'H':'M', it.el, i===0 ? 'メール' : 'メール（確認用）', d.email); });
         return;
       }
-      var full = { name:d.name, kana:d.kana, tel:d.tel, zip:d.zip, addr:d.addr, company:d.company, subject:d.subject }[k] || '';
+      var full = { name:d.name, kana:d.kana, tel:d.tel, zip:d.zip, addr:addrRest, company:d.company, subject:d.subject }[k] || '';
       var parts = { name:nm, kana:kn, tel:telp, zip:zipp }[k] || [full];
       var LBL = { name:'氏名', kana:'ふりがな', tel:'電話', zip:'郵便番号', addr:'住所', company:'会社名', subject:'件名' }[k];
       if (!full) { list.forEach(function(it){ if (it.req) add('L', it.el, LBL+'（設定タブに未入力）'); }); return; }
       var plan = splitFill(list, full, parts);
+      if (k==='kana' && plan) { var ms = plan.map(function(p){ return kanaMode(p[0]); }); kanaGroupMode = ms.indexOf('kata')>=0 ? 'kata' : ms.indexOf('hira')>=0 ? 'hira' : ''; }
       if (!plan) { list.forEach(function(it){ if (it.req) add('L', it.el, LBL+'（欄の分かれ方が想定外）：'+it.lab.slice(0,16)); }); return; }
       plan.forEach(function(p){
         var it = p[0], v = p[1];
-        if (k==='kana' && /カタカナ|カナ|ｶﾅ/.test(it.lab) && !/ひらがな/.test(it.lab)) v = v.replace(/[ぁ-ゖ]/g, function(ch){ return String.fromCharCode(ch.charCodeAt(0)+0x60); });
+        if (k==='kana') v = kanaFor(it, v);
         var vv = trim(it.el, v); if (vv===null) { add('L', it.el, LBL+'（文字数制限）'); return; }
         setValue(it.el, vv);
         var tier = (k==='name' || k==='tel') && plan.length===1 ? 'H' : 'M';
@@ -1620,7 +1648,14 @@ function mirabonFill(){
       if (!visible(sel)) return;
       var lab = labelOf(sel);
       if (PATIENT.test(lab)) { res.skip.push({ el:sel, label:'患者向けの選択：'+lab.slice(0,20) }); return; }
-      if (/都道府県|pref/i.test(lab)) { if (req(sel,lab)) add('L', sel, '都道府県を選んでください'); return; }
+      if (sel === prefSel || /都道府県|pref/i.test(lab)) {
+        if (sel.selectedIndex > 0 && sel.value) return;
+        var po = PREF && [].slice.call(sel.options).filter(function(o){ return o.value && o.textContent.trim().replace(/\s/g,'') === PREF; })[0];
+        if (!po && PREF) po = [].slice.call(sel.options).filter(function(o){ return o.value && o.textContent.indexOf(PREF.replace(/[都府県]$/, '')) === 0; })[0];
+        if (po) { sel.value = po.value; sel.dispatchEvent(new Event('change',{bubbles:true})); add('M', sel, '都道府県', po.textContent.trim()); }
+        else if (req(sel,lab)) add('L', sel, PREF ? '都道府県を選んでください' : '都道府県（設定タブの住所に都道府県から入れると自動で選びます）');
+        return;
+      }
       if (sel.selectedIndex > 0) return;
       var hit = [].slice.call(sel.options).filter(function(o){ return o.value && /取材|メディア|掲載/.test(o.textContent); })[0];
       if (hit) { sel.value = hit.value; sel.dispatchEvent(new Event('change',{bubbles:true})); add('M', sel, '用件：「'+hit.textContent.trim().slice(0,16)+'」を選択'); }
