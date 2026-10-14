@@ -173,6 +173,8 @@ table.stat th,table.stat td{padding:8px 12px;border-top:1px solid var(--line);te
 table.stat th{font-size:11px;color:var(--sub);border-top:none}
 .foot{font-size:11.5px;color:var(--sub);margin-top:20px;border-top:1px solid var(--line);padding-top:10px}
 /* 設定画面の右：全体の流れ */
+.afform{display:grid;grid-template-columns:1fr 1fr;gap:6px 12px;max-width:620px}
+.afbm{display:inline-block;padding:8px 14px;background:var(--accent);color:#fff;border-radius:6px;text-decoration:none;font-size:13px;font-weight:700;cursor:grab}
 .setwrap{display:grid;grid-template-columns:minmax(0,760px) minmax(300px,460px);gap:32px;align-items:start;max-width:1320px}
 .flowbox{position:sticky;top:0;background:var(--sheet);border:1px solid var(--line);border-radius:10px;padding:18px 20px}
 .flowbox h3{margin:0 0 2px;font-size:15px}
@@ -279,9 +281,13 @@ table.stat th{font-size:11px;color:var(--sub);border-top:none}
     <div class="cards" id="statCards"></div>
     <h2 class="sec">送り方別（メール × フォーム）</h2>
     <div style="overflow-x:auto"><table class="stat" id="statChannel"></table></div>
+    <h2 class="sec">送ったあとの反応（院の数）</h2>
+    <div style="overflow-x:auto"><table class="stat" id="statEvents"></table></div>
+    <h2 class="sec">送れなかった理由</h2>
+    <div style="overflow-x:auto"><table class="stat" id="statFail"></table></div>
     <h2 class="sec">文面タイプ別（CTM × 汎用の比較）</h2>
     <div style="overflow-x:auto"><table class="stat" id="statTable"></table></div>
-    <div class="foot">返信率は「返信あり＋アポ」÷ 送信数。20件たまった時点でCTM×汎用を比較する（decisions.md 2026-08-27）。</div>
+    <div class="foot">反応の内訳と送れなかった理由は、③の「送れなかった」ボタン・返事待ちのボタン・週1回の受信箱の取り込みで記録した出来事から数えています。返信率は「返信あり＋アポ」÷ 送信数。20件たまった時点でCTM×汎用を比較する（decisions.md 2026-08-27）。</div>
   </section>
 </main>
 
@@ -298,6 +304,12 @@ table.stat th{font-size:11px;color:var(--sub);border-top:none}
       <input type="password" id="myNewPw" placeholder="新しいパスワード（8文字以上）" autocomplete="new-password">
       <div class="btns"><button id="myPwBtn" class="mini">変更する</button><span class="status" id="myPwStat"></span></div>
     </div>
+    <h2 class="sec">フォーム自動入力（この端末のブラウザだけに保存）</h2>
+    <p style="font-size:13px">③でフォームの院を開いたとき、名前・メール・本文などを問い合わせフォームに流し込む機能です。入れるのは確度の高い欄だけ（緑）。迷う欄は入れて黄色、判断できない欄（用件の選択など）は入れずに赤枠にします。院が違うときと営業お断りの記載があるときは止まります。<b>送信ボタンは押しません。</b></p>
+    <div id="afForm" class="afform"></div>
+    <p style="font-size:13px;margin-top:12px"><b>最初に1回だけ：</b>下のボタンをブラウザの<b>ブックマークバーへドラッグ</b>して登録してください（ブックマークバーが出ていなければ ⌘+Shift+B）。</p>
+    <div class="btns"><a id="afBm" href="#" class="afbm">📥 診ラボン自動入力</a><span class="sm">← ブックマークバーへドラッグ</span></div>
+    <p style="font-size:13px">毎回：③で「自動入力データをコピー」→「問い合わせフォームを開く」→ ブックマークの「診ラボン自動入力」を押す → 黄色と赤を確認して送信 → 完了画面を見てから「送信した」。<br><span class="sm">機能を更新したときは、ブックマークを登録し直してください。</span></p>
     <h2 class="sec">AIの設定</h2>
     <p style="font-size:13px">文面生成＝kimi-k3、ファクトチェック・HP検索＝kimi-k2.6（生成とは別モデルで検証するため）。SupabaseのSecretsに <b>MOONSHOT_API_KEY</b> が必要です。モデルは <b>GENERATE_MODEL</b> ／ <b>FACTCHECK_MODEL</b> ／ <b>FINDHP_MODEL</b> で差し替えられます。</p>
   </div>
@@ -415,7 +427,8 @@ function stageOf(c){
 function pageOf(st){ for(const [p,v] of Object.entries(PAGES)) if(v.stages.includes(st)) return p; return 'prep'; }
 
 /* ============ 状態 ============ */
-let clinics = [], CONST = {}, user = null, sendLogs = [];
+let clinics = [], CONST = {}, user = null, sendLogs = [], sendEvents = [];
+let eventsReady = true;                   // send_events 表がDBにあるか（本番反映SQLの実行前は false）
 let page = 'prep';
 const sub  = { prep:'find', write:'write', send:'send' };
 const filt = { dept:'', star:false };
@@ -425,6 +438,7 @@ const selIds = new Set();
 const genCache = {};
 let sel = null, view = 'mail';           // ② で開いている院・プレビュー形式
 let sendIdx = 0, sendView = null;        // ③ キューの位置・形式（null=送り先に合わせて自動）
+let failOpen = null;                     // ③ 「送れなかった」の理由パネルを開いている院のid
 let editId = null, hlId = null;          // ① 編集中の行・検索で飛んだ行
 
 /* ============ 認証 ============ */
@@ -473,18 +487,51 @@ async function fetchAllClinics(){
     if(!r.data || r.data.length < N) return { data:out };
   }
 }
+// 送信記録・出来事も1000件ずつ最後まで読む（件数が増えても集計が欠けないように）
+async function fetchAllRows(table, orderCol){
+  const out = []; const N = 1000;
+  for(let from=0;;from+=N){
+    const r = await sb.from(table).select('*').order(orderCol,{ascending:false}).order('id').range(from, from+N-1);
+    if(r.error) return r;
+    out.push(...(r.data||[]));
+    if(!r.data || r.data.length < N) return { data:out };
+  }
+}
 async function loadAll(){
-  const [c, s, l] = await Promise.all([
+  const [c, s, l, ev] = await Promise.all([
     fetchAllClinics(),
     sb.from('app_settings').select('*').eq('key','constants').single(),
-    sb.from('send_log').select('*').order('sent_at',{ascending:false}).limit(5000),
+    fetchAllRows('send_log', 'sent_at'),
+    fetchAllRows('send_events', 'occurred_at'),
   ]);
   if(c.error){ toast('リスト取得に失敗: '+c.error.message); return; }
   clinics = c.data || [];
   CONST = (s.data && s.data.value) || {};
   sendLogs = l.data || [];
+  sendEvents = ev.error ? [] : (ev.data || []);
+  eventsReady = !ev.error;
+  if(!eventsReady) toast('出来事の表（send_events）がDBにありません。「送れなかった」と反応の集計は使えません → 管理者（嶋崎）に連絡してください');
   renderAll();
 }
+// 送信のあとに起きたこと（受付メール・不達・返信・辞退・アポ・送れなかった等）を1件ずつ残す。消さない
+async function addEvent(c, kind, extra){
+  if(!eventsReady){ toast('出来事の表（send_events）がDBにないため記録できません。管理者（嶋崎）に連絡してください'); return null; }
+  const row = clean({ clinic_id:c.id, kind, occurred_at:new Date().toISOString(), source:'app', created_by:user.id, ...(extra||{}) });
+  const { data, error } = await sb.from('send_events').insert(row).select().single();
+  if(error){ toast('出来事の保存失敗: '+error.message); return null; }
+  sendEvents.unshift(data); return data;
+}
+// 「送れなかった」の理由。DBの reason_label() と同じ言葉
+const FAIL_REASONS = [
+  ['send_error','送信エラーになった','送信ボタンでエラー・送れない。未送信のまま残し、後日送り直す'],
+  ['no_form','お問い合わせフォームがなかった','リンク切れ・ページがない'],
+  ['wrong_target','送り先が違った','求人用・別の院・無関係の窓口'],
+  ['refuse','営業・取材お断りの記載',''],
+  ['captcha','CAPTCHAが解けない／電話のみ',''],
+  ['closed','閉院・移転',''],
+  ['other','その他','下の欄に内容を書く'],
+];
+const FAIL_LABEL = Object.fromEntries(FAIL_REASONS.map(([k,l])=>[k,l]).concat([['unknown','理由未記録']]));
 /* DB（PostgreSQLのjsonb）は NUL文字（\u0000）を保存できない。HP由来の文字列に紛れることがあるので保存前に必ず除去する */
 function clean(v){
   if(typeof v === 'string') return v.replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/g, '');
@@ -1190,7 +1237,13 @@ function renderQueue(list, todayN){
       <div class="seg" id="qSeg"><button data-v="mail" class="${!form?'on':''}">メール版</button><button data-v="form" class="${form?'on':''}">フォーム版</button></div>
     </div>
     <div class="qcard">
-      <div class="dhead"><h2 class="serif">${c.priority?'★ ':''}${esc(c.name)}</h2><span class="sub">${esc(c.department||'')}</span><span style="flex:1"></span><button class="mini" id="qDel" style="color:var(--bad);border-color:var(--bad)">削除</button></div>
+      <div class="dhead"><h2 class="serif">${c.priority?'★ ':''}${esc(c.name)}</h2><span class="sub">${esc(c.department||'')}</span><span style="flex:1"></span><button class="mini" id="qFail" style="color:var(--bad);border-color:var(--bad)">${failOpen===c.id?'閉じる':'送れなかった'}</button></div>
+      ${failOpen===c.id ? `<div class="alert bad" id="qFailBox" style="margin:8px 0 10px">
+        <div style="font-weight:700;margin-bottom:6px">送れなかった理由を選んでください</div>
+        ${FAIL_REASONS.map(([k,l,h],i)=>`<label style="display:block;margin:3px 0;cursor:pointer"><input type="radio" name="qFailR" value="${k}"${i===0?' checked':''}> ${esc(l)}${h?` <span class="sm">— ${esc(h)}</span>`:''}</label>`).join('')}
+        <input id="qFailNote" placeholder="メモ（任意。その他のときは内容を）" style="width:100%;margin-top:6px">
+        <div class="btns" style="margin-top:8px"><button class="primary mini" id="qFailSave">記録する</button><span class="sm">「送信エラー」以外は対象外になり、送信キューから外れます（①の「対象外」から戻せます）</span></div>
+      </div>` : ''}
       <div class="sm" style="margin:6px 0 10px">宛名：<b>${esc(c.director_name ? c.director_name+' 先生' : '院長先生')}</b>　送り先：${c.email ? 'メール '+esc(c.email) : ''}${c.email && c.form_url ? ' ／ ' : ''}${c.form_url ? 'フォーム'+(c.captcha?'（CAPTCHAあり）':'') : ''}
         ${fc ? `<br><span class="pill${fc.overridden?' warn':''}">${fc.overridden?'指摘あり・確認済み':'検証✓'}</span> ${esc(fc.summary||'')}` : ''}</div>
       ${fc && fc.overridden ? `<div class="alert warn" style="margin-bottom:8px">⚠ ファクトチェックの指摘を、人が確認したうえで通した文面です（${esc(fc.overridden_by||'')}）${(Array.isArray(fc.claims)?fc.claims:[]).filter(x=>x.verdict&&x.verdict!=='裏付けあり').map(x=>`<div class="sm" style="margin-top:4px">✗「${esc(x.text||'')}」${esc(x.verdict||'')}${x.severity?'／重要度'+esc(x.severity):''}</div>`).join('')}</div>` : ''}
@@ -1199,9 +1252,10 @@ function renderQueue(list, todayN){
       <div class="letter">${esc(letter)}</div>
       <div class="btns" style="margin-top:14px">
         ${c.email && !form ? `<button class="primary bigbtn" id="qMailApp">メールアプリで開く</button><button class="bigbtn" id="qGmail">Gmailで開く</button>` : ''}
-        ${c.form_url && form ? `<a href="${esc(c.form_url)}" target="_blank" rel="noopener"><button class="primary bigbtn">問い合わせフォームを開く</button></a>` : ''}
+        ${c.form_url && form ? `<button class="bigbtn" id="qFill">① 自動入力データをコピー</button><a href="${esc(c.form_url)}" target="_blank" rel="noopener"><button class="primary bigbtn">② 問い合わせフォームを開く</button></a>` : ''}
         <button class="bigbtn" id="qCopy">本文をコピー</button>
       </div>
+      ${c.form_url && form ? `<div class="sm" style="margin-top:6px">③ フォームでブックマークの「診ラボン自動入力」を押す（初回は設定タブで登録）。確認画面がある時は最後まで進み、<b>完了画面を見てから</b>下の「送信した」を押す</div>` : ''}
       <div class="btns" style="margin-top:14px;padding-top:12px;border-top:1px solid var(--line)">
         <button class="primary bigbtn" id="qSent">送信した → 記録して次へ</button>
         <span style="flex:1"></span>
@@ -1220,16 +1274,36 @@ function renderQueue(list, todayN){
     window.open('https://mail.google.com/mail/?view=cm&to='+encodeURIComponent(c.email)+'&su='+encodeURIComponent(CONST.subject||'')+'&body='+encodeURIComponent(letter), '_blank');
   };
   $('qCopy').onclick = async ()=>{ await copy(letter); toast((form?'フォーム版':'メール版')+'をコピーしました'); };
+  if($('qFill')) $('qFill').onclick = async ()=>{
+    const p = fillPayload(c);
+    if(p.error){ toast(p.error); return; }
+    await copy(JSON.stringify(p)); toast('自動入力データをコピーしました → フォームを開いてブックマークを押す');
+  };
   $('qSent').onclick = async ()=>{
     if(todayN>=30 && !confirm('今日はすでに30件送っています。記録しますか？')) return;
     $('qSent').disabled = true;
     await markSent(c, form);
   };
   $('qBack').onclick = ()=>{ sel = c; view = form ? 'form' : 'mail'; selIds.clear(); go('write'); };
-  // 削除＝「送らない」にしてキューから外す。行は消さない（消すとCSVの再取込で同じ院が戻り、二重送信の元になる）
-  $('qDel').onclick = async ()=>{
-    if(!confirm(c.name+' を削除しますか？（送信キューから外します。①の「対象外」から戻せます）')) return;
-    if(await upd(c, { status:'NG', ng_reason: '送信画面で削除' })){ sendView = null; toast(c.name+' を削除しました'); renderAll(); }
+  // 送れなかった＝理由を出来事として残す。行は消さない（消すとCSVの再取込で同じ院が戻り、二重送信の元になる）
+  // 送信エラーは一時的なことがあるので未送信のまま残す。それ以外は対象外にしてキューから外す
+  $('qFail').onclick = ()=>{ failOpen = failOpen===c.id ? null : c.id; renderAll(); };
+  if($('qFailSave')) $('qFailSave').onclick = async ()=>{
+    const r = (document.querySelector('input[name="qFailR"]:checked')||{}).value;
+    const note = $('qFailNote').value.trim();
+    if(!r) return;
+    if(r==='other' && !note){ toast('その他の内容をメモに書いてください'); return; }
+    $('qFailSave').disabled = true;
+    const ev = await addEvent(c, 'send_failed', { reason:r, note:note||null, detail:{ channel: form?'フォーム':'メール', to: form ? c.form_url : c.email } });
+    if(!ev){ $('qFailSave').disabled = false; return; }
+    if(r!=='send_error'){
+      const ok = await upd(c, { status:'NG', ng_reason: FAIL_LABEL[r] + (note ? '：'+note : '') });
+      if(!ok) return;
+    }
+    failOpen = null; sendView = null;
+    if(r==='send_error') sendIdx++;   // 未送信のまま残すので、次の院へ進める
+    toast(c.name+'：'+FAIL_LABEL[r]+' を記録しました');
+    renderAll();
   };
 }
 function renderSentTable(list, st){
@@ -1284,9 +1358,292 @@ async function markResult(c, status, result){
     const { error } = await sb.from('send_log').update(p).eq('id', l.id);
     if(!error) Object.assign(l, p);
   }
+  // 「返事待ちに戻す」以外は出来事としても残す（押し間違えて戻しても、押した記録は消さない）
+  const kind = { '返信':'reply', 'アポ':'appo', '辞退':'decline' }[result];
+  if(kind) await addEvent(c, kind, { send_log_id: l ? l.id : null });
   if(await upd(c, { status })){ toast((ST_LABEL[status]||status)+' を記録しました'); renderAll(); }
 }
 async function copy(t){ try{ await navigator.clipboard.writeText(t); }catch(e){ const ta = document.createElement('textarea'); ta.value = t; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); ta.remove(); } }
+/* ============================================================
+   フォーム自動入力（ブックマークレット）2026-10-14
+   ③の「自動入力データをコピー」→ フォームを開く → ブックマークの「診ラボン自動入力」。
+   確度の高い欄だけ入れる（緑）／迷う欄は入れて黄色／判断できない欄は入れずに赤枠。
+   院が違う・営業お断りの記載がある時は何も入れずに止まる。送信ボタンは押さない。
+   旧版：20260827_問い合わせDM自動化/3_フォーム自動入力.js
+   ============================================================ */
+const SENDER_FIELDS = [['name','氏名','例：嶋崎 迦一（姓と名の間に空白）'],['kana','ふりがな','例：しまざき かいち（ひらがな）'],
+  ['email','メールアドレス','例：mirabon@w-c.co.jp'],['tel','電話番号','例：090-0000-0000'],
+  ['company','会社名・団体名','例：診ラボン編集部'],['zip','郵便番号（任意）','例：150-0001'],['addr','住所（任意）','必須のフォームだけで使います']];
+function loadSender(){ try{ return JSON.parse(localStorage.getItem('mirabon_sender')||'{}')||{}; }catch(e){ return {}; } }
+function saveSender(s){ try{ localStorage.setItem('mirabon_sender', JSON.stringify(s)); }catch(e){} }
+function fillPayload(c){
+  const s = loadSender();
+  const miss = ['name','email','tel'].filter(k=>!(s[k]||'').trim());
+  if(miss.length) return { error: '設定タブの「フォーム自動入力」に '+miss.map(k=>SENDER_FIELDS.find(f=>f[0]===k)[1]).join('・')+' を入れてください（この端末に1回だけ）' };
+  let host = ''; try{ host = new URL(c.form_url).hostname; }catch(e){}
+  return { __mirabon:2, ts:Date.now(), clinic:c.name, formUrl:c.form_url, host,
+    name:s.name.trim(), kana:(s.kana||'').trim(), email:s.email.trim(), tel:s.tel.trim(),
+    company:(s.company||'').trim(), zip:(s.zip||'').trim(), addr:(s.addr||'').trim(),
+    subject: CONST.subject||'', body: letterFor(c, true) };
+}
+
+/* ここから下の関数は、そのままブックマークレットになる（アプリの外＝クリニックのページで動く）。
+   アプリ内の変数は使えない。関数内のコメントはブロックコメントだけ（URL化の時に削る。行コメントは不可） */
+function mirabonFill(){
+  'use strict';
+  var PATIENT = /生年月日|誕生日|症状|既往|診察券|保険証|希望日|来院|予約|時間帯|性別|年齢|お薬|服用|受診|患者|カルテ|紹介状|治療歴|身長|体重/;
+  var FAX = /fax|ＦＡＸ|ファクス|ファックス/i;
+  var AGREE = /同意|承諾|承知|プライバシー|個人情報|規約|privacy|agree|accept/i;
+  var NG = /(営業|セールス|売り込み|勧誘|広告)[^。\n]{0,20}(お断り|ご遠慮|禁止|受け付けて(おり)?(ません|いません)|対応(いた)?(しかね|でき)ません)/;
+  var COL = { H:['#0f766e','#e6f4f1'], M:['#b45309','#fff7e0'], L:['#dc2626','#fff1f1'] };
+
+  function base(h){ h = (h||'').toLowerCase().replace(/^www\./,''); return (h==='forms.gle') ? 'docs.google.com' : h; }
+  function text(el){ return (el && el.textContent || '').replace(/\s+/g,' ').trim(); }
+  /* 項目名を探す。入力欄のすぐ前（同じ枠の中）→ 枠の前、の順に近いものから。
+     枠の中に別の入力欄があったらそれ以上は上らない（隣の欄の項目名を拾って1つずれるのを防ぐ） */
+  var FIELD = 'input:not([type=hidden]):not([type=submit]):not([type=button]),textarea,select';
+  function nFields(node, el){
+    var n = 0, names = {};
+    [].slice.call(node.querySelectorAll(FIELD)).forEach(function(f){
+      if ((f.type==='radio' || f.type==='checkbox') && f.name && f.name===el.name) { if (names[f.name]) return; names[f.name] = 1; }
+      n++;
+    });
+    return n;
+  }
+  function nearLabel(el){
+    var node = el;
+    for (var depth = 0; depth < 5 && node && node !== el.ownerDocument.body; depth++) {
+      var sib = node.previousElementSibling;
+      while (sib && (sib.tagName==='BR' || !text(sib))) sib = sib.previousElementSibling;
+      if (sib && !sib.querySelector(FIELD) && text(sib).length < 60 && !/^(SCRIPT|STYLE)$/.test(sib.tagName)) return text(sib);
+      var parent = node.parentElement;
+      if (!parent || nFields(parent, el) > 1) {
+        /* 枠に複数の欄がある＝表の行(th)以外は上らない */
+        var tr = el.closest('tr'); if (tr && tr.querySelector('th') && nFields(tr, el) <= 3) return text(tr.querySelector('th'));
+        return '';
+      }
+      node = parent;
+    }
+    return '';
+  }
+  function labelOf(el){
+    var bits = [];
+    if (el.id) { var l = el.ownerDocument.querySelector('label[for="'+CSS.escape(el.id)+'"]'); if (l) bits.push(text(l)); }
+    var p = el.closest('label'); if (p) bits.push(text(p));
+    if (!bits.length) bits.push(nearLabel(el));
+    var fs = el.closest('fieldset'); if (fs && fs.querySelector('legend') && nFields(fs, el) <= 3) bits.push(text(fs.querySelector('legend')));
+    bits.push(el.getAttribute('aria-label')||'', el.placeholder||'');
+    return bits.join(' ').replace(/\s+/g,' ').trim().slice(0,160);
+  }
+  /* 内部名は弱い手がかり。フォーム部品の名前に紛れた語（mailform等）は消してから見る */
+  function attrsOf(el){ return [el.name||'', el.id||'', el.getAttribute('autocomplete')||''].join(' ').replace(/mail_?form|form_?mail|mailer|contact_?form|form_?record|wpcf7/ig,' '); }
+  function req(el, lab){ return el.required || el.getAttribute('aria-required')==='true' || /必須|※|\*|required/i.test(lab+' '+attrsOf(el)+' '+(el.className||'')); }
+  function visible(el){ return !el.disabled && el.offsetParent !== null && el.ownerDocument.defaultView.getComputedStyle(el).visibility !== 'hidden'; }
+  function kindOf(el, lab){ var k = kindBy(el, lab) || kindBy(el, attrsOf(el)); if (el.tagName==='TEXTAREA') return k==='patient' ? k : 'body'; return k; }
+  function kindBy(el, lab){
+    var t = (el.type||'').toLowerCase(), ac = (el.getAttribute('autocomplete')||'').toLowerCase();
+    if (PATIENT.test(lab)) return 'patient';
+    if (FAX.test(lab)) return 'fax';
+    if (/ふりがな|フリガナ|ﾌﾘｶﾞﾅ|かな|カナ|kana|furigana|ruby|yomi|^(せい|めい|セイ|メイ)$/i.test(lab)) return 'kana';
+    if (t==='email' || /メール|e-?mail|mail/i.test(lab) || ac==='email') return 'email';
+    if (t==='tel' || /電話|tel|phone|携帯/i.test(lab) || /^tel/.test(ac)) return 'tel';
+    if (/郵便|〒|zip|postal/i.test(lab) || ac==='postal-code') return 'zip';
+    if (/住所|所在地|address|市区町村|番地|都道府県/i.test(lab)) return 'addr';
+    if (/会社|法人|企業|所属|団体|組織|貴社|御社|company|organization/i.test(lab)) return 'company';
+    if (/件名|題名|タイトル|subject|title/i.test(lab)) return 'subject';
+    if (/お?名前|氏名|ご担当|担当者|芳名|name|^姓|^名|sei|mei/i.test(lab) || /^(family|given)?-?name$/.test(ac)) return 'name';
+    if (/内容|本文|ご質問|ご相談|メッセージ|message|inquiry|comment|ご要望|詳細/i.test(lab)) return 'body';
+    return '';
+  }
+  function setValue(el, v){
+    var w = el.ownerDocument.defaultView, proto = el.tagName==='TEXTAREA' ? w.HTMLTextAreaElement.prototype : w.HTMLInputElement.prototype;
+    Object.getOwnPropertyDescriptor(proto,'value').set.call(el, v);
+    el.dispatchEvent(new Event('input',{bubbles:true})); el.dispatchEvent(new Event('change',{bubbles:true}));
+  }
+  function mark(el, tier){ var c = COL[tier]; el.style.outline = '3px solid '+c[0]; el.style.outlineOffset = '1px'; if (tier!=='L') el.style.background = c[1]; }
+
+  function getPayload(cb){
+    var ask = function(){ var t = window.prompt('診ラボン｜自動入力データを貼り付けてください（⌘V → Enter）',''); if (t) cb(t); };
+    if (navigator.clipboard && navigator.clipboard.readText) {
+      navigator.clipboard.readText().then(function(t){ if (t && t.indexOf('"__mirabon":2')>=0) cb(t); else ask(); })['catch'](ask);
+    } else ask();
+  }
+
+  function run(raw){ try { run2(raw); } catch(e) { alert('診ラボン自動入力でエラーが出ました（'+e.message+'）。\n「本文をコピー」で貼り付けてください。'); } }
+  function run2(raw){
+    var d; try { d = JSON.parse(raw); } catch(e) { alert('データの形式が違います。文面アプリ③で「自動入力データをコピー」を押し直してください。'); return; }
+    if (d.__mirabon !== 2) { alert('古い形式のデータです。文面アプリ③で「自動入力データをコピー」を押し直してください。'); return; }
+
+    /* ---- ページ単位の判定（ここで止まったら何も入れない） ---- */
+    if (base(location.hostname) !== base(d.host) && !base(location.hostname).endsWith('.'+base(d.host)) && !base(d.host).endsWith('.'+base(location.hostname))) {
+      alert('【止めました】院が違う可能性があります\n\nコピーしたデータ：'+d.clinic+'（'+d.host+'）\nいま開いているページ：'+location.hostname+'\n\n文面アプリ③で、この院の「自動入力データをコピー」を押し直してください。');
+      return;
+    }
+    if (Date.now() - (d.ts||0) > 30*60*1000 && !confirm('コピーしてから30分以上たったデータです（'+d.clinic+'）。\nこのまま入れますか？')) return;
+    var ng = ((document.body||document.documentElement).innerText||'').match(NG);
+    if (ng && !confirm('【確認】このページに次の記載があります\n\n「'+ng[0]+'」\n\n取材依頼として送るか、人が判断してください。\nOK＝入力を続ける／キャンセル＝止める（文面アプリ③で「送れなかった → お断り記載」）')) return;
+
+    /* ---- フォームを特定（本文欄があって入力欄が一番多いもの） ---- */
+    var form = null, best = -1;
+    /* 入力欄が無ければ、同じサイト内の埋め込み枠（iframe）の中を探す。別サイトの枠（Googleフォーム等）には入れない */
+    var TXT = 'textarea,input:not([type]),input[type=text],input[type=email],input[type=tel]';
+    var doc = document;
+    if (!doc.querySelector(TXT)) {
+      [].slice.call(document.querySelectorAll('iframe')).some(function(fr){
+        try { var dd = fr.contentDocument; if (dd && dd.querySelector(TXT)) { doc = dd; return true; } } catch(e) {}
+        return false;
+      });
+    }
+    [].slice.call(doc.querySelectorAll('form')).forEach(function(f){
+      if (!f.querySelector(TXT)) return;
+      var sc = f.querySelectorAll('textarea').length*10 + f.querySelectorAll('input,select').length;
+      if (sc > best) { best = sc; form = f; }
+    });
+    var scope = form || doc;
+    if (!scope.querySelector(TXT)) {
+      alert('入力欄が見つかりません。\nフォームが別の枠（埋め込み）にある場合は、枠の中をクリックしてからもう一度押すか、「本文をコピー」で貼り付けてください。');
+      return;
+    }
+
+    var res = { H:[], M:[], L:[], skip:[] };
+    function add(tier, el, label, v){ if (el) mark(el, tier); res[tier].push({ el:el, label:label, v:v||'' }); }
+
+    /* ---- テキスト欄を種類ごとに集める ---- */
+    var groups = {}, order = [];
+    [].slice.call(scope.querySelectorAll('input,textarea')).forEach(function(el){
+      var t = (el.type||el.tagName).toLowerCase();
+      if (['hidden','submit','button','image','reset','file','radio','checkbox','password'].indexOf(t)>=0) return;
+      if (!visible(el) || el.readOnly) return;
+      if (/captcha|recaptcha|token/i.test(el.name||'')) return;
+      var lab = labelOf(el), k = kindOf(el, lab);
+      /* 選択肢の横の「その他（詳細）」欄は、用件の一部なので触らない */
+      if (el.tagName!=='TEXTAREA' && el.parentElement && el.parentElement.querySelector('input[type=radio],input[type=checkbox]')) k = '';
+      if (el.value && el.value.trim()) { res.skip.push({ el:el, label:'入力済みのため触らず：'+lab.slice(0,20) }); return; }
+      if (k==='patient') { res.skip.push({ el:el, label:'患者向けの欄：'+lab.slice(0,20) }); return; }
+      if (k==='fax') { res.skip.push({ el:el, label:'FAX（空欄のまま）' }); return; }
+      var item = { el:el, lab:lab, req:req(el,lab) };
+      if (!k) { order.push(['?', item]); return; }
+      if (!groups[k]) { groups[k] = []; order.push([k, groups[k]]); }
+      groups[k].push(item);
+    });
+
+    var nm = (d.name||'').split(/[\s　]+/), kn = (d.kana||'').split(/[\s　]+/);
+    var telp = (d.tel||'').split(/[-－ー‐]/), zipp = (d.zip||'').split(/[-－ー‐]/);
+    function splitFill(list, full, parts, label, needAll){
+      if (list.length===1) return [[list[0], full]];
+      if (list.length===parts.length && parts.length>1) return list.map(function(it,i){ return [it, parts[i]]; });
+      return null;
+    }
+    function trim(el, v){ return (el.maxLength>0 && v.length>el.maxLength) ? null : v; }
+
+    order.forEach(function(o){
+      var k = o[0];
+      if (k==='?') { var it = o[1]; if (it.req) add('L', it.el, '不明な必須欄：'+it.lab.slice(0,24)); else res.skip.push({ el:it.el, label:'任意の欄（空欄）：'+it.lab.slice(0,20) }); return; }
+      var list = o[1];
+      if (k==='body') {
+        var b0 = list[0]; var v = trim(b0.el, d.body);
+        if (v===null) { add('L', b0.el, '本文（文字数制限 '+b0.el.maxLength+'字を超えるため手で短く）'); }
+        else { setValue(b0.el, v); add(b0.el.tagName==='TEXTAREA' ? 'H':'M', b0.el, '本文', v); }
+        list.slice(1).forEach(function(it){ if (it.req) add('L', it.el, '本文らしき2つ目の欄：'+it.lab.slice(0,20)); });
+        return;
+      }
+      if (k==='email') {
+        list.forEach(function(it, i){ setValue(it.el, d.email); add((i===0 || /確認|再入力|confirm|again/i.test(it.lab)) ? 'H':'M', it.el, i===0 ? 'メール' : 'メール（確認用）', d.email); });
+        return;
+      }
+      var full = { name:d.name, kana:d.kana, tel:d.tel, zip:d.zip, addr:d.addr, company:d.company, subject:d.subject }[k] || '';
+      var parts = { name:nm, kana:kn, tel:telp, zip:zipp }[k] || [full];
+      var LBL = { name:'氏名', kana:'ふりがな', tel:'電話', zip:'郵便番号', addr:'住所', company:'会社名', subject:'件名' }[k];
+      if (!full) { list.forEach(function(it){ if (it.req) add('L', it.el, LBL+'（設定タブに未入力）'); }); return; }
+      var plan = splitFill(list, full, parts);
+      if (!plan) { list.forEach(function(it){ if (it.req) add('L', it.el, LBL+'（欄の分かれ方が想定外）：'+it.lab.slice(0,16)); }); return; }
+      plan.forEach(function(p){
+        var it = p[0], v = p[1];
+        if (k==='kana' && /カタカナ|カナ|ｶﾅ/.test(it.lab) && !/ひらがな/.test(it.lab)) v = v.replace(/[ぁ-ゖ]/g, function(ch){ return String.fromCharCode(ch.charCodeAt(0)+0x60); });
+        var vv = trim(it.el, v); if (vv===null) { add('L', it.el, LBL+'（文字数制限）'); return; }
+        setValue(it.el, vv);
+        var tier = (k==='name' || k==='tel') && plan.length===1 ? 'H' : 'M';
+        add(tier, it.el, LBL + (plan.length>1 ? '（分割）' : ''), vv);
+      });
+    });
+
+    /* ---- 選択欄（セレクト・ラジオ）：「取材」の選択肢がある時だけ選ぶ。それ以外は人が選ぶ ---- */
+    [].slice.call(scope.querySelectorAll('select')).forEach(function(sel){
+      if (!visible(sel)) return;
+      var lab = labelOf(sel);
+      if (PATIENT.test(lab)) { res.skip.push({ el:sel, label:'患者向けの選択：'+lab.slice(0,20) }); return; }
+      if (/都道府県|pref/i.test(lab)) { if (req(sel,lab)) add('L', sel, '都道府県を選んでください'); return; }
+      if (sel.selectedIndex > 0) return;
+      var hit = [].slice.call(sel.options).filter(function(o){ return o.value && /取材|メディア|掲載/.test(o.textContent); })[0];
+      if (hit) { sel.value = hit.value; sel.dispatchEvent(new Event('change',{bubbles:true})); add('M', sel, '用件：「'+hit.textContent.trim().slice(0,16)+'」を選択'); }
+      else if (req(sel,lab) || /用件|種別|項目|内容/.test(lab)) add('L', sel, '選択してください：'+lab.slice(0,24));
+    });
+    var radios = {};
+    [].slice.call(scope.querySelectorAll('input[type=radio],input[type=checkbox]')).forEach(function(el){
+      if (!visible(el) && !(el.parentElement && el.parentElement.offsetParent)) return;
+      var key = el.type+':'+(el.name||el.id);
+      (radios[key] = radios[key] || []).push(el);
+    });
+    Object.keys(radios).forEach(function(key){
+      var g = radios[key], lab0 = labelOf(g[0]), box = g[0].closest('label,li,td,dd,div') || g[0].parentElement;
+      if (g.some(function(e){ return e.checked; })) return;
+      if (g[0].type==='checkbox' && g.length===1 && AGREE.test(lab0)) { g[0].click(); add('H', box, '同意チェック'); return; }
+      if (PATIENT.test(lab0)) { res.skip.push({ el:box, label:'患者向けの選択：'+lab0.slice(0,20) }); return; }
+      if (g[0].type==='checkbox' && g.length===1 && /確認/.test(lab0)) { g[0].click(); add('M', box, '確認チェック：'+lab0.slice(0,20)); return; }
+      var hit = g.filter(function(e){ return /取材|メディア|掲載/.test(labelOf(e)); })[0];
+      if (hit) { hit.click(); add('M', hit.closest('label,li,td,dd,div') || hit.parentElement, '用件：「'+labelOf(hit).slice(0,16)+'」を選択'); return; }
+      if (g.some(function(e){ return req(e, labelOf(e)); }) || /用件|種別|項目|お問い?合わ?せ/.test(lab0)) add('L', box, '選択してください：'+lab0.slice(0,24));
+    });
+
+    if (!res.H.length && !res.M.length && !res.L.length) {
+      alert('このページには入力できる欄が見つかりませんでした。\n問い合わせフォームのページか確認してください（文面アプリ③の「送れなかった」で記録できます）。');
+      return;
+    }
+    /* ---- 結果パネル（ページの右下。項目を押すとその欄へ飛ぶ） ---- */
+    var old = document.getElementById('__mirabonPanel'); if (old) old.remove();
+    var pn = document.createElement('div'); pn.id = '__mirabonPanel';
+    pn.style.cssText = 'position:fixed;right:16px;bottom:16px;z-index:2147483647;width:360px;max-height:70vh;overflow:auto;background:#fff;color:#1f2933;border:1px solid #d5dbe1;border-radius:10px;box-shadow:0 8px 30px rgba(0,0,0,.18);font:13px/1.6 -apple-system,"Hiragino Sans",sans-serif;padding:14px 16px;text-align:left';
+    /* innerHTMLは使わない（Googleフォーム等のTrusted Types制限で落ちるため） */
+    function E(tag, css, txt){ var e = document.createElement(tag); if (css) e.style.cssText = css; if (txt != null) e.textContent = txt; return e; }
+    var head = E('div','display:flex;align-items:center;gap:8px');
+    head.appendChild(E('b','font-size:14px','診ラボン自動入力'));
+    head.appendChild(E('span','color:#6b7280;font-size:12px;flex:1', String(d.clinic)));
+    var x = E('button','border:0;background:none;font-size:18px;cursor:pointer;color:#6b7280','×'); x.onclick = function(){ pn.remove(); }; head.appendChild(x);
+    pn.appendChild(head);
+    pn.appendChild(res.L.length
+      ? E('div','margin-top:8px;padding:8px 10px;background:#fff1f1;color:#b91c1c;border-radius:6px;font-weight:700','赤枠の '+res.L.length+' 欄を手で入力・選択してください')
+      : E('div','margin-top:8px;padding:8px 10px;background:#e6f4f1;color:#0f766e;border-radius:6px;font-weight:700','手入力が必要な欄はありません'));
+    [['L','手で入力・選択（赤）'],['M','入れたので確認（黄）'],['H','自動で入力（緑）'],['skip','触っていない']].forEach(function(sg){
+      var list = res[sg[0]]; if (!list.length) return;
+      var c = sg[0]==='skip' ? ['#6b7280','#f3f4f6'] : COL[sg[0]];
+      pn.appendChild(E('div','margin-top:10px;font-weight:700;color:'+c[0], sg[1]+'（'+list.length+'）'));
+      list.forEach(function(it){
+        var row = E('div','cursor:pointer;margin:3px 0;padding:3px 8px;border-left:4px solid '+c[0]+';background:'+c[1]+';border-radius:3px', it.label);
+        if (it.v) row.appendChild(E('span','color:#6b7280','：'+it.v.slice(0,18).replace(/\n/g,' ')+(it.v.length>18?'…':'')));
+        row.setAttribute('data-t', sg[0]);
+        row.onclick = function(){ if (it.el) { it.el.scrollIntoView({ behavior:'smooth', block:'center' }); try { it.el.focus({ preventScroll:true }); } catch(err) {} } };
+        pn.appendChild(row);
+      });
+    });
+    var foot = E('div','margin-top:12px;padding-top:10px;border-top:1px solid #e5e7eb;font-size:12px;color:#374151','送信ボタンは押していません。黄色と赤を確認してから送信。');
+    foot.appendChild(E('b','display:block','確認画面がある時は最後まで進み、完了画面を見てから文面アプリで「送信した」を押してください。'));
+    pn.appendChild(foot);
+    (document.body||document.documentElement).appendChild(pn);
+    var first = (res.L[0] || res.M[0] || res.H[0] || {}).el; if (first) first.scrollIntoView({ behavior:'smooth', block:'center' });
+  }
+  getPayload(run);
+}
+function bookmarkletHref(){
+  const code = mirabonFill.toString().replace(/\/\*[\s\S]*?\*\//g,'').replace(/\n\s+/g,'\n').replace(/\n{2,}/g,'\n');
+  return 'javascript:'+encodeURIComponent('('+code+')();void 0');
+}
+function renderAutofillSettings(){
+  const s = loadSender();
+  $('afForm').innerHTML = SENDER_FIELDS.map(([k,l,ph])=>`<div><label>${l}</label><input data-k="${k}" value="${esc(s[k]||'')}" placeholder="${esc(ph)}" style="width:100%"></div>`).join('');
+  $('afForm').querySelectorAll('input').forEach(i=>i.oninput = ()=>{ const v = loadSender(); v[i.dataset.k] = i.value; saveSender(v); });
+  $('afBm').href = bookmarkletHref();
+  $('afBm').onclick = e=>{ e.preventDefault(); toast('クリックではなく、ブックマークバーへドラッグして登録してください'); };
+}
 
 /* ============ 全体検索（どの工程にいても見つけて飛ぶ） ============ */
 $('gQ').addEventListener('input', ()=>{
@@ -1914,11 +2271,29 @@ function exportCSV(){
 }
 
 /* ============ 集計 ============ */
+// 出来事（send_events）から、送り方別の反応と送れなかった理由を数える。同じ院の同じ種類は1回と数える
+function renderEventStats(logs){
+  const chOf = {}; logs.forEach(l=>{ if(!chOf[l.clinic_id]) chOf[l.clinic_id] = l.channel; });
+  const kinds = [['ack','受付メール'],['bounce','不達'],['reply','返信'],['decline','辞退'],['appo','アポ'],['call','電話'],['unrecorded_send','記録漏れの送信']];
+  const uniq = (k, ch) => new Set(sendEvents.filter(e=>e.kind===k && (ch==='合計' || chOf[e.clinic_id]===ch)).map(e=>e.clinic_id)).size;
+  $('statEvents').innerHTML = '<tr><th>送り方</th><th>送信</th>' + kinds.map(([,l])=>`<th>${l}</th>`).join('') + '</tr>' + ['メール','フォーム','合計'].map(ch=>{
+    const n = ch==='合計' ? logs.length : logs.filter(l=>l.channel===ch).length;
+    return `<tr${ch==='合計'?' style="font-weight:700"':''}><td>${ch}</td><td>${n}</td>` + kinds.map(([k])=>`<td>${uniq(k,ch)}</td>`).join('') + '</tr>';
+  }).join('');
+  const fails = sendEvents.filter(e=>e.kind==='send_failed');
+  const rows = Object.keys(FAIL_LABEL).map(k=>[FAIL_LABEL[k], fails.filter(e=>e.reason===k).length]).filter(([,n])=>n>0);
+  $('statFail').innerHTML = '<tr><th>理由</th><th>件数</th></tr>' + (rows.length ? rows.map(([l,n])=>`<tr><td>${esc(l)}</td><td>${n}</td></tr>`).join('') + `<tr style="font-weight:700"><td>合計</td><td>${fails.length}</td></tr>` : '<tr><td colspan="2">まだありません</td></tr>');
+}
 async function renderStats(){
   const order = ['find','confirm','research','write','verify','fix','send','waiting','result','excluded'];
   $('stageCards').innerHTML = order.map(s=>`<div class="card"><div class="n">${clinics.filter(c=>stageOf(c)===s).length}</div><div class="l">${esc(STAGE_LABEL[s])}</div></div>`).join('');
-  const { data:logs, error } = await sb.from('send_log').select('*');
-  if(error){ toast(error.message); return; }
+  const [lr, er] = await Promise.all([fetchAllRows('send_log','sent_at'), fetchAllRows('send_events','occurred_at')]);
+  if(lr.error){ toast(lr.error.message); return; }
+  const logs = lr.data;
+  if(!er.error) sendEvents = er.data;
+  eventsReady = !er.error;
+  if(eventsReady) renderEventStats(logs);
+  else ['statEvents','statFail'].forEach(id=>{ $(id).innerHTML = '<tr><td>出来事の表（send_events）がDBにまだありません。supabase/deploy/20261014_本番反映.sql の実行が必要です</td></tr>'; });
   const sent = logs.length, replied = logs.filter(l=>['返信','アポ'].includes(l.result)).length, apo = logs.filter(l=>l.result==='アポ').length;
   $('statCards').innerHTML = [['送信',sent],['返信',replied],['アポ',apo],['返信率', sent ? Math.round(replied/sent*1000)/10+'%' : '—']]
     .map(([l,n])=>`<div class="card"><div class="n">${n}</div><div class="l">${l}</div></div>`).join('');
@@ -1945,6 +2320,7 @@ const SET_KEYS = [
 ];
 function renderSettings(){
   $('setForm').innerHTML = SET_KEYS.map(([k,l])=>`<div><label>${l}</label><textarea data-k="${k}" rows="${(CONST[k]||'').length>60?3:1}">${esc(CONST[k]||'')}</textarea></div>`).join('');
+  renderAutofillSettings();
   renderFlow();
 }
 /* 全体の流れ（設定画面の右）。件数はいまのリストから数え、クリックでその工程に飛ぶ */
