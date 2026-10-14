@@ -311,7 +311,7 @@ table.stat th{font-size:11px;color:var(--sub);border-top:none}
     <div class="btns"><a id="afBm" href="#" class="afbm">📥 診ラボン自動入力</a><span class="sm">← ブックマークバーへドラッグ</span></div>
     <p style="font-size:13px">毎回：③の「問い合わせフォームを開く」→ 開いたフォームでブックマークの「診ラボン自動入力」を押す → 黄色と赤を確認して送信 → 完了画面を見てから「送信した」。<br><span class="sm">機能を更新したときは、ブックマークを登録し直してください。</span></p>
     <h2 class="sec">AIの設定</h2>
-    <p style="font-size:13px">文面生成＝kimi-k3、ファクトチェック・HP検索＝kimi-k2.6（生成とは別モデルで検証するため）。SupabaseのSecretsに <b>MOONSHOT_API_KEY</b> が必要です。モデルは <b>GENERATE_MODEL</b> ／ <b>FACTCHECK_MODEL</b> ／ <b>FINDHP_MODEL</b> で差し替えられます。</p>
+    <p style="font-size:13px">本番はGoogleのGemini（2026-10-14時点、材料集め・文面生成・ファクトチェックとも gemini-3.6-flash）。SupabaseのSecretsに <b>GEMINI_API_KEY</b> が必要です。工程ごとのAIは <b>{工程}_PROVIDER</b> ／ <b>{工程}_MODEL</b>（工程＝EXTRACT・GENERATE・FACTCHECK・FINDHP）で差し替えられます。</p>
   </div>
   <aside class="flowbox" id="flowBox"></aside>
   </section>
@@ -395,7 +395,7 @@ const NOTE = {
   dup:'同じHPで電話番号も同じ（または空欄）の院です。同じ院に2回送らないよう、残す1行を選んでください。残さない行は「送らない」になります（あとで戻せます）。',
   all:'すべての院。「編集」からHP・電話・送り先・メモを直せます。',
   write:'材料集め（人 → 特徴・動き）→ 執筆 の順に進みます（1件約2〜3分）。工程ごとに保存するので、失敗しても押し直せば失敗した工程から再開します。',
-  verify:'生成とは別のモデルで「事実の裏付け」と「宛名・診療科・表現」を同時に検証します。OKなら ③送信 に移ります。',
+  verify:'書いた文面をHPの原文と突き合わせ、生成とは別の呼び出しで「事実の裏付け」と「宛名・診療科・表現」を同時に検証します。OKなら ③送信 に移ります。',
   fix:'検証で指摘が出た院。右で直して「修正を保存」→ もう一度ファクトチェック。指摘が的外れで、このまま送ってよい場合は「指摘を確認済みにして送信へ」。指摘は消えず、③送信の画面にも出ます。',
   retry:'「送れなかった → 送信エラー」で記録した院の保管場所。送るキューからは外していますが、対象外にはしていません。時間をおいて開き、送れたら「送信した」、また送れなければ「送れなかった」で記録してください（送信エラーならここに残り、ほかの理由なら対象外へ）。',
   waiting:'送信済みで返事を待っている院。返事が来たら結果を記録してください。',
@@ -1154,7 +1154,7 @@ async function unapproveFact(c){
 async function runFactOne(c){
   if(isDirty()) await saveEdits(c, { silent:true });
   if(c.factcheck) await resetFact(c);   // 検証済みを押し直した＝最初から検証し直す
-  $('dFact').disabled = true; $('dStat').textContent = '別モデルで検証中…（裏付け・宛名と表現を同時に）';
+  $('dFact').disabled = true; $('dStat').textContent = '検証中…（裏付け・宛名と表現を同時に）';
   try{
     const fc = await runFact(c);
     renderAll();
@@ -1908,7 +1908,7 @@ function mergeFact(a, b){
   return fc;
 }
 async function runFact(c, onStep){
-  // 生成(kimi-k3)とは別モデル(kimi-k2.6)で独立検証。「裏付け」と「宛名・表現」を同時に走らせ、それぞれ保存
+  // 生成とは別の呼び出しで独立検証（モデルは FACTCHECK_MODEL。本番は生成と同じ gemini-3.6-flash）。「裏付け」と「宛名・表現」を同時に走らせ、それぞれ保存
   const g = getGen(c);
   if(!g || !g.result) throw new Error('先にAI生成が必要です');
   await ensureHeavy(c);
@@ -2418,7 +2418,7 @@ const FLOW = [
   ]},
   { p:'write', steps:[
     { k:'write',  no:'5', how:'「選択をAI生成」— 材料集め（人→特徴・動き）→執筆。工程ごとに保存し、失敗しても押し直せばそこから再開（1件約2〜3分）' },
-    { k:'verify', no:'6', how:'「選択をファクトチェック」— 別モデル（kimi-k2.6）が「事実の裏付け」と「宛名・診療科・表現」を同時に検証' },
+    { k:'verify', no:'6', how:'「選択をファクトチェック」— AIが文面をHPの原文と突き合わせ、「事実の裏付け」と「宛名・診療科・表現」を同時に検証' },
     { k:'fix',    br:true, how:'指摘を直して「修正を保存」→ 6 に戻って再検証' },
   ]},
   { p:'send', steps:[
