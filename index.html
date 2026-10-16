@@ -1235,6 +1235,7 @@ function renderSend(){
   bindToolbar('send');
   if(st==='send' || st==='retry') renderQueue(list, todayN); else renderSentTable(list, st);
 }
+const SENT_LOCK_MS = 1500; let sentShownFor = null, sentLockUntil = 0;
 function renderQueue(list, todayN){
   const b = $('sendBody');
   if(!list.length){ b.innerHTML = sub.send==='retry' ? '<div class="status">送り直す院はありません。「送れなかった → 送信エラー」で記録した院がここに保管されます。</div>' : '<div class="status">送れる院はありません。② でファクトチェックOKになった院がここに並びます。</div>'; return; }
@@ -1301,6 +1302,10 @@ function renderQueue(list, todayN){
     if(p.error){ toast(p.error); return; }
     await copy(JSON.stringify(p)); toast('自動入力データをコピーしました → フォームを開いてブックマークを押す');
   };
+  // 院が切り替わった直後は押せない（記録の二度押しで、まだ送っていない次の院まで記録されるのを防ぐ）
+  if(sentShownFor !== c.id){ sentShownFor = c.id; sentLockUntil = Date.now() + SENT_LOCK_MS; }
+  const wait = sentLockUntil - Date.now();
+  if(wait > 0){ const btn = $('qSent'); btn.disabled = true; setTimeout(()=>{ btn.disabled = false; }, wait); }
   $('qSent').onclick = async ()=>{
     if(todayN>=30 && !confirm('今日はすでに30件送っています。記録しますか？')) return;
     $('qSent').disabled = true;
