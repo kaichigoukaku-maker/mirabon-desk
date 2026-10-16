@@ -1519,7 +1519,13 @@ function mirabonFill(){
 
   function run(raw){ try { run2(raw); } catch(e) { alert('診ラボン自動入力でエラーが出ました（'+e.message+'）。\n「本文をコピー」で貼り付けてください。'); } }
   function run2(raw){
-    var d; try { d = JSON.parse(raw); } catch(e) { alert('データの形式が違います。文面アプリ③で「自動入力データをコピー」を押し直してください。'); return; }
+    /* 古いサイト（MooTools 1.2 等）は window.JSON を別物で上書きしている。そのときは空の枠から本物の JSON.parse を借りる */
+    var parse = function(t){
+      if (window.JSON && typeof JSON.parse === 'function' && /native code/.test(Function.prototype.toString.call(JSON.parse))) return JSON.parse(t);
+      var fr = document.createElement('iframe'); fr.style.display = 'none'; (document.body||document.documentElement).appendChild(fr);
+      try { return fr.contentWindow.JSON.parse(t); } finally { fr.parentNode.removeChild(fr); }
+    };
+    var d; try { d = parse(raw); } catch(e) { alert('データの形式が違います。文面アプリ③で「自動入力データをコピー」を押し直してください。'); return; }
     if (d.__mirabon !== 2) { alert('古い形式のデータです。文面アプリ③で「自動入力データをコピー」を押し直してください。'); return; }
 
     /* ---- ページ単位の判定（ここで止まったら何も入れない） ---- */
