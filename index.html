@@ -1492,10 +1492,17 @@ function mirabonFill(){
     if (/内容|本文|ご質問|ご相談|メッセージ|message|inquiry|comment|ご要望|詳細/i.test(lab)) return 'body';
     return '';
   }
+  /* 入力イベントの発火：古いサイト（MooTools 1.2 等）は window.Event を自前のクラスで上書きしていて new Event() がサイト側で落ちる。
+     上書きされない document.createEvent で作る（同じ input/change の bubbles 付きイベント） */
+  function fire(el, type){
+    var ev; var doc = el.ownerDocument;
+    try { ev = doc.createEvent('Event'); ev.initEvent(type, true, true); } catch(e) { ev = new Event(type, { bubbles:true }); }
+    el.dispatchEvent(ev);
+  }
   function setValue(el, v){
     var w = el.ownerDocument.defaultView, proto = el.tagName==='TEXTAREA' ? w.HTMLTextAreaElement.prototype : w.HTMLInputElement.prototype;
     Object.getOwnPropertyDescriptor(proto,'value').set.call(el, v);
-    el.dispatchEvent(new Event('input',{bubbles:true})); el.dispatchEvent(new Event('change',{bubbles:true}));
+    fire(el, 'input'); fire(el, 'change');
   }
   function mark(el, tier){ var c = COL[tier]; el.style.outline = '3px solid '+c[0]; el.style.outlineOffset = '1px'; if (tier!=='L') el.style.background = c[1]; }
 
@@ -1663,13 +1670,13 @@ function mirabonFill(){
         if (sel.selectedIndex > 0 && sel.value) return;
         var po = PREF && [].slice.call(sel.options).filter(function(o){ return o.value && o.textContent.trim().replace(/\s/g,'') === PREF; })[0];
         if (!po && PREF) po = [].slice.call(sel.options).filter(function(o){ return o.value && o.textContent.indexOf(PREF.replace(/[都府県]$/, '')) === 0; })[0];
-        if (po) { sel.value = po.value; sel.dispatchEvent(new Event('change',{bubbles:true})); add('M', sel, '都道府県', po.textContent.trim()); }
+        if (po) { sel.value = po.value; fire(sel, 'change'); add('M', sel, '都道府県', po.textContent.trim()); }
         else if (req(sel,lab)) add('L', sel, PREF ? '都道府県を選んでください' : '都道府県（設定タブの住所に都道府県から入れると自動で選びます）');
         return;
       }
       if (sel.selectedIndex > 0) return;
       var hit = [].slice.call(sel.options).filter(function(o){ return o.value && /取材|メディア|掲載/.test(o.textContent); })[0];
-      if (hit) { sel.value = hit.value; sel.dispatchEvent(new Event('change',{bubbles:true})); add('M', sel, '用件：「'+hit.textContent.trim().slice(0,16)+'」を選択'); }
+      if (hit) { sel.value = hit.value; fire(sel, 'change'); add('M', sel, '用件：「'+hit.textContent.trim().slice(0,16)+'」を選択'); }
       else if (req(sel,lab) || /用件|種別|項目|内容/.test(lab)) add('L', sel, '選択してください：'+lab.slice(0,24));
     });
     var radios = {};
