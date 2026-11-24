@@ -1221,6 +1221,14 @@ function letterFor(c, form){
 }
 
 /* ============ ③ 送信 ============ */
+// 送信画面に出す、文面を書いたAIのメモ（休診・院長の不在・本院と分院の混在・担当分野のずれなど）。検証がOKでも送る人の目に入るように（2026-11-24）
+// 「院長名が無い」系のメモは、宛名がHPで確かめられている時は出さない（混乱のもと）
+function sendCautions(c){
+  const r = (c.gen && c.gen.result) || {};
+  const noName = /院長名.{0,15}(記載|見当たら|特定|空欄|不明)/;
+  const named = !directorCheck(c, r);
+  return [...new Set((r.cautions || []).filter(x => x && !(named && noName.test(x))))];
+}
 function renderSend(){
   const st = sub.send, list = curList();
   const t0 = new Date(); t0.setHours(0,0,0,0);
@@ -1263,6 +1271,7 @@ function renderQueue(list, todayN){
       <div class="sm" style="margin:6px 0 10px">宛名：<b>${esc(c.director_name ? c.director_name+' 先生' : '院長先生')}</b>　送り先：${c.email ? 'メール '+esc(c.email) : ''}${c.email && c.form_url ? ' ／ ' : ''}${c.form_url ? 'フォーム'+(c.captcha?'（CAPTCHAあり）':'') : ''}
         ${fc ? `<br><span class="pill${fc.overridden?' warn':''}">${fc.overridden?'指摘あり・確認済み':'検証✓'}</span> ${esc(fc.summary||'')}` : ''}</div>
       ${fc && fc.overridden ? `<div class="alert warn" style="margin-bottom:8px">⚠ ファクトチェックの指摘を、人が確認したうえで通した文面です（${esc(fc.overridden_by||'')}）${(Array.isArray(fc.claims)?fc.claims:[]).filter(x=>x.verdict&&x.verdict!=='裏付けあり').map(x=>`<div class="sm" style="margin-top:4px">✗「${esc(x.text||'')}」${esc(x.verdict||'')}${x.severity?'／重要度'+esc(x.severity):''}</div>`).join('')}</div>` : ''}
+      ${sendCautions(c).length ? `<div class="alert warn" style="margin-bottom:8px">⚠ 文面を書いたAIのメモ（送る前に確認）${sendCautions(c).map(x=>`<div class="sm" style="margin-top:4px">・${esc(x)}</div>`).join('')}</div>` : ''}
       ${dupGroups().some(g=>g.includes(c)) ? `<div class="alert bad" style="margin-bottom:8px">⚠ この院は重複の疑いがあります（同じHP・電話の行が他にもあります）。二重に送らないよう、① の「重複の疑い」で整理してから送ってください</div>` : ''}
       ${form ? '' : `<div class="sm" style="margin-bottom:6px">件名：${esc(CONST.subject||'')}　<button class="mini" id="qSubj">件名をコピー</button></div>`}
       <div class="letter">${esc(letter)}</div>
