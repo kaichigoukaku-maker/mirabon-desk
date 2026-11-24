@@ -1590,18 +1590,29 @@ function tidyName(name, evidence){
   return n;
 }
 const NAME_VARIANT = { '髙':'高', '𠮷':'吉', '﨑':'崎', '嵜':'崎', '德':'徳', '邊':'辺', '邉':'辺', '齋':'斎', '齊':'斉', '濱':'浜', '澤':'沢', '廣':'広', '國':'国', '櫻':'桜', '龍':'竜', '眞':'真', '嶋':'島', '槇':'槙', '實':'実' };
+function nameKey(s){ return String(s||'').normalize('NFKC').replace(/\s/g, '').replace(/[髙𠮷﨑嵜德邊邉齋齊濱澤廣國櫻龍眞嶋槇實]/gu, ch=>NAME_VARIANT[ch]); }
 // 宛名：HPで取れなければ医療情報ネットの管理者名を使う。使った時・HPと違う時は director_note を残し、検証で人の確認に回す
 function setDirector(c, r){
   const pd = ((c.pipe||{}).people||{}).director;
   const hp = tidyName((pd && typeof pd==='object' && pd.name) || (typeof r.director==='string' ? r.director : ''), pd && typeof pd==='object' ? pd.evidence : '');
   const p = pubOf(c), pub = p && p.director ? tidyName(p.director, c.src_text || '') : '';
-  const key = s=>String(s||'').normalize('NFKC').replace(/\s/g, '').replace(/[髙𠮷﨑嵜德邊邉齋齊濱澤廣國櫻龍眞嶋槇實]/gu, ch=>NAME_VARIANT[ch]);
+  const key = nameKey;
   const onHp = pub && key(c.src_text || '').includes(key(pub));   // 「院長」と並んでいなくても、HPの本文に同じ氏名が出ていれば確かめられた扱い
   r.director = hp || pub;
+  r.director_hp = hp;
   r.director_note = hp && pub && key(hp)!==key(pub) ? `宛名の確認：HPは${hp}、医療情報ネットの管理者は${pub}`
     : (!hp && pub && !onHp ? `宛名はHPに無く、医療情報ネットの管理者（${pub}）を使用` : '');
   if(r.director_note) r.cautions = [...(r.cautions||[]), r.director_note];
   return r;
+}
+// 送る宛名（リストの院長名か、文面の宛名）がHPで確かめられない時の注記。空なら確かめられている（2026-11-24 先進会眼科：リストの名前がHPの院長と違ったのに送信へ進んだ）
+function directorCheck(c, r){
+  const used = String(c.director_name || r.director || '').trim();
+  if(!used) return '';
+  const hp = r.director_hp || '';
+  if(hp) return nameKey(hp) === nameKey(used) ? '' : `宛名の確認：送る宛名は${used}、HPの院長は${hp}`;
+  if(nameKey(c.src_text || '').includes(nameKey(used))) return '';
+  return r.director_note || `宛名の確認：${used}はHPで確かめられない`;
 }
 function stepState(c, k){
   const P = c.pipe || {}, err = P.errors && P.errors[k];
@@ -1716,10 +1727,11 @@ async function runFact(c, onStep){
   }
   const claimParts = c.pipe.fc_claims ? [c.pipe.fc_claims] : FC_SLOTS.map(([k])=>c.pipe[k]).filter(Boolean);
   const fc = mergeFact(claimParts, c.pipe.fc_meta);
-  // 宛名をHPで確かめられなかった院（医療情報ネットの管理者名を使った・HPと違う）は人の確認に回す。人が名前を直したら外す
-  if(r.director_note && String(c.director_name||'').replace(/\s/g,'') === String(r.director||'').replace(/\s/g,'')){
-    fc.address = Object.assign({}, fc.address, { risk:true, note:[fc.address.note, r.director_note].filter(Boolean).join(' ／ ') });
-    fc.summary = (fc.verdict === 'OK' ? '' : fc.summary + ' ／ ') + r.director_note;
+  // 送る宛名をHPで確かめられない院（医療情報ネットやリストの名前を使った・HPの院長と違う）は人の確認に回す。人がHPの院長に直したら外れる
+  const dnote = directorCheck(c, r);
+  if(dnote){
+    fc.address = Object.assign({}, fc.address, { risk:true, note:[fc.address.note, dnote].filter(Boolean).join(' ／ ') });
+    fc.summary = (fc.verdict === 'OK' ? '' : fc.summary + ' ／ ') + dnote;
     fc.verdict = '要確認';
   }
   // 院長名がHPに載っていなかった院は、宛名を「院長先生」に切り替える（名前を書かなければ間違えようがない）。
