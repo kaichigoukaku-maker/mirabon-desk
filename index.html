@@ -347,10 +347,11 @@ function cleanHpUrl(raw){
     return { url:'', hint:u.href, ig, why: ig ? 'インスタのURL' : 'SNS・リンク集・予約／検索サイト・地図・短縮URL' };
   ['utm_source','utm_medium','utm_campaign','utm_content','utm_term','fbclid','igshid','gclid','si'].forEach(k=>u.searchParams.delete(k));
   u.hash = '';
-  // 採用・予約・問い合わせの下層ページ（例：/entry/）がHP欄に入っていたらサイトのトップにする。
+  // 採用・予約・問い合わせ・アクセス・お知らせの下層ページ（例：/entry/・/access/）がHP欄に入っていたらサイトのトップにする。
   // HP取得（文面の材料集め）がそのページを「トップ」として読んでしまうため。分院ページ（/iizuka.html 等）はそのまま
-  if(/^\/(entry|recruit|job|jobs|saiyo|kyujin|career|reserve|reservation|yoyaku|booking|contact|inquiry|form)([\/._-]|$)/i.test(u.pathname))
-    return { url: u.origin + '/', fixed: u.href, why:'採用・予約などの下層ページだったのでトップに直した' };
+  // 2026-11-24：Serperの検索結果からアクセスのページ（/access/）が選ばれたので access・map・news などを足した
+  if(/^\/(entry|recruit|job|jobs|saiyo|kyujin|career|reserve|reservation|yoyaku|booking|contact|inquiry|form|access|map|news|topics|blog|column|faq)([\/._-]|$)/i.test(u.pathname))
+    return { url: u.origin + '/', fixed: u.href, why:'採用・予約・アクセスなどの下層ページだったのでトップに直した' };
   return { url: u.href };
 }
 // 電話番号：全角→半角。先頭の0が落ちたもの（Excel経由：734870066 / 3-5942-7550）は0を補う
