@@ -1559,9 +1559,16 @@ function splitFacts(f){
   };
 }
 /* ============ 公的データ（医療情報ネット・厚生局）と宛名（文面v3・2026-11-24） ============
-   clinics.research.public に手元の一括処理（deploy/20261124_文面v3/public_batch.py）で入れておく。
+   clinics.public_data に手元の一括処理（deploy/20261124_文面v3/public_batch.py）で入れておく。research に入れると、
+   一覧を開いたままの画面が research を丸ごと保存した時に消えるので列を分け、一覧には読み込まず使う直前に取りに行く（ensurePub）。
    原文は事実確認にも渡す。HPに珍しい専門が無い院だけ、専門外来・往診・珍しい手術の件数で補い、それも無ければ二次情報を渡す（C脱却） */
-function pubOf(c){ const p = (c.research||{}).public; return p && p.matched ? p : null; }
+function pubOf(c){ const p = c.public_data; return p && p.matched ? p : null; }
+async function ensurePub(c){
+  if(c._pub) return;
+  const { data, error } = await sb.from('clinics').select('public_data').eq('id', c.id).single();
+  if(error) throw new Error('公的データの読み込みに失敗: '+error.message);
+  c.public_data = data.public_data || null; c._pub = true;
+}
 function srcWithPub(c, src){ const p = pubOf(c); return (src||'') + (p && p.text ? '\n\n' + p.text : ''); }
 function applyPublic(facts, p){
   if(!p || (facts.specialty||[]).some(x=>x && x.rare===true)) return facts;
@@ -1613,6 +1620,7 @@ function stepErrors(c){ const e = (c.pipe||{}).errors || {}; return Object.keys(
 async function runPipeline(c, onStep){
   const step = m=>{ if(onStep) onStep(m); };
   await ensureHeavy(c);
+  await ensurePub(c);
   c.pipe = c.pipe || {};
   if(!c.pipe.people && !c.pipe.features && !c.pipe.signals && c.gen && c.gen.facts) Object.assign(c.pipe, splitFacts(c.gen.facts));
   // 1. HP取得
@@ -1685,6 +1693,7 @@ async function runFact(c, onStep){
   const g = getGen(c);
   if(!g || !g.result) throw new Error('先にAI生成が必要です');
   await ensureHeavy(c);
+  await ensurePub(c);
   c.pipe = c.pipe || {};
   const r = g.result;
   const base = {
